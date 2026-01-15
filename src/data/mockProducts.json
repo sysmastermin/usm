@@ -5,7 +5,9 @@
         "price": "2,450,000",
         "image": "https://images.unsplash.com/photo-1628157777174-88469e578c74?q=80&w=800&auto=format&fit=crop",
         "category": "거실장",
-        "description": "넉넉한 수납 공간을 갖춘 모던하고 다재다능한 USM 할러 TV 유닛입니다."
+        "description": "넉넉한 수납 공간을 갖춘 모던하고 다재다능한 USM 할러 TV 유닛입니다.",
+        "scenes": ["living", "dining"],
+        "colors": ["graphite-black", "anthracite", "mid-gray", "light-gray"]
     },
     {
         "id": "2",
@@ -13,7 +15,9 @@
         "price": "1,850,000",
         "image": "https://images.unsplash.com/photo-1605218427361-bca4f5358045?q=80&w=800&auto=format&fit=crop",
         "category": "수납장",
-        "description": "거실이나 서재에 잘 어울리는 클래식한 2x2 구성의 수납장입니다."
+        "description": "거실이나 서재에 잘 어울리는 클래식한 2x2 구성의 수납장입니다.",
+        "scenes": ["living", "homeoffice", "bedroom"],
+        "colors": ["pure-white", "light-gray", "mid-gray", "usm-green"]
     },
     {
         "id": "3",
@@ -21,7 +25,9 @@
         "price": "1,450,000",
         "image": "https://images.unsplash.com/photo-1594228941785-5df1453267b2?q=80&w=800&auto=format&fit=crop",
         "category": "테이블",
-        "description": "크롬 마감으로 우아함을 더한 다이닝 또는 작업용 테이블입니다."
+        "description": "크롬 마감으로 우아함을 더한 다이닝 또는 작업용 테이블입니다.",
+        "scenes": ["dining", "homeoffice", "smalloffice"],
+        "colors": ["graphite-black", "anthracite", "steel-blue", "usm-green"]
     },
     {
         "id": "4",
@@ -29,7 +35,9 @@
         "price": "1,250,000",
         "image": "https://images.unsplash.com/photo-1590136932598-c17849c719e7?q=80&w=800&auto=format&fit=crop",
         "category": "서랍장",
-        "description": "유연한 사무실 정리를 위한 이동식 서랍장입니다."
+        "description": "유연한 사무실 정리를 위한 이동식 서랍장입니다.",
+        "scenes": ["homeoffice", "smalloffice"],
+        "colors": ["pure-white", "light-gray", "mid-gray", "anthracite"]
     },
     {
         "id": "5",
@@ -37,7 +45,9 @@
         "price": "850,000",
         "image": "https://images.unsplash.com/photo-1540574163026-643ea20ade25?q=80&w=800&auto=format&fit=crop",
         "category": "침실",
-        "description": "하나의 서랍이 있는 컴팩트한 침대 협탁입니다."
+        "description": "하나의 서랍이 있는 컴팩트한 침대 협탁입니다.",
+        "scenes": ["bedroom"],
+        "colors": ["pure-white", "light-gray", "usm-beige", "usm-brown"]
     },
     {
         "id": "6",
@@ -45,6 +55,98 @@
         "price": "3,250,000",
         "image": "https://images.unsplash.com/photo-1600121848594-d8644e57abab?q=80&w=800&auto=format&fit=crop",
         "category": "수납장",
-        "description": "최대 수납을 위한 넓은 공간의 3x3 수납 유닛입니다."
+        "description": "최대 수납을 위한 넓은 공간의 3x3 수납 유닛입니다.",
+        "scenes": ["living", "bedroom", "homeoffice"],
+        "colors": ["graphite-black", "anthracite", "mid-gray", "steel-blue", "usm-green"]
+    },
+    {
+        "id": "7",
+        "name": "USM 할러 로우보드 2x1",
+        "price": "1,650,000",
+        "image": "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800&auto=format&fit=crop",
+        "category": "거실장",
+        "description": "TV나 오디오 장비를 위한 낮은 높이의 모던한 로우보드입니다.",
+        "scenes": ["living", "dining"],
+        "colors": ["pure-white", "light-gray", "graphite-black", "anthracite"]
+    },
+    {
+        "id": "8",
+        "name": "USM 할러 데스크 1200x600",
+        "price": "1,950,000",
+        "image": "https://images.unsplash.com/photo-1524758631624-e2822e304c36?q=80&w=800&auto=format&fit=crop",
+        "category": "테이블",
+        "description": "홈오피스에 최적화된 넓은 작업 공간을 제공하는 데스크입니다.",
+        "scenes": ["homeoffice", "smalloffice"],
+        "colors": ["pure-white", "light-gray", "mid-gray", "steel-blue", "genshan-blue"]
+    },
+    {
+        "id": "9",
+        "name": "USM 할러 키즈 수납장 2x2",
+        "price": "1,550,000",
+        "image": "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800&auto=format&fit=crop",
+        "category": "수납장",
+        "description": "아이들의 장난감과 옷을 깔끔하게 정리할 수 있는 키즈룸 전용 수납장입니다.",
+        "scenes": ["kidsroom", "bedroom"],
+        "colors": ["pure-white", "golden-yellow", "pure-orange", "usm-green", "steel-blue"]
+    },
+    {
+        "id": "10",
+        "name": "USM 할러 다이닝 테이블 1800x900",
+        "price": "2,150,000",
+        "image": "https://images.unsplash.com/photo-1594228941785-5df1453267b2?q=80&w=800&auto=format&fit=crop",
+        "category": "테이블",
+        "description": "가족과 함께 식사를 즐길 수 있는 넓은 다이닝 테이블입니다.",
+        "scenes": ["dining", "living"],
+        "colors": ["pure-white", "light-gray", "mid-gray", "usm-brown", "usm-beige"]
+    },
+    {
+        "id": "11",
+        "name": "USM 할러 와실 수납장 1x2",
+        "price": "1,350,000",
+        "image": "https://images.unsplash.com/photo-1605218427361-bca4f5358045?q=80&w=800&auto=format&fit=crop",
+        "category": "수납장",
+        "description": "일본 전통 공간에 어울리는 미니멀한 디자인의 와실 수납장입니다.",
+        "scenes": ["washitsu", "living"],
+        "colors": ["pure-white", "light-gray", "usm-beige", "usm-brown"]
+    },
+    {
+        "id": "12",
+        "name": "USM 할러 책장 1x4",
+        "price": "1,750,000",
+        "image": "https://images.unsplash.com/photo-1600121848594-d8644e57abab?q=80&w=800&auto=format&fit=crop",
+        "category": "수납장",
+        "description": "책과 소품을 보기 좋게 전시할 수 있는 오픈형 책장입니다.",
+        "scenes": ["homeoffice", "living", "bedroom"],
+        "colors": ["pure-white", "light-gray", "mid-gray", "anthracite", "graphite-black"]
+    },
+    {
+        "id": "13",
+        "name": "USM 할러 침대 사이드 테이블",
+        "price": "950,000",
+        "image": "https://images.unsplash.com/photo-1540574163026-643ea20ade25?q=80&w=800&auto=format&fit=crop",
+        "category": "침실",
+        "description": "침대 옆에 두기 좋은 컴팩트한 사이드 테이블입니다.",
+        "scenes": ["bedroom"],
+        "colors": ["pure-white", "light-gray", "usm-beige", "mid-gray"]
+    },
+    {
+        "id": "14",
+        "name": "USM 할러 미니 와고",
+        "price": "750,000",
+        "image": "https://images.unsplash.com/photo-1590136932598-c17849c719e7?q=80&w=800&auto=format&fit=crop",
+        "category": "서랍장",
+        "description": "작은 공간에도 잘 어울리는 이동식 미니 와고입니다.",
+        "scenes": ["living", "dining", "bedroom", "homeoffice"],
+        "colors": ["pure-white", "light-gray", "mid-gray", "anthracite", "usm-green", "steel-blue"]
+    },
+    {
+        "id": "15",
+        "name": "USM 할러 키즈 데스크",
+        "price": "1,250,000",
+        "image": "https://images.unsplash.com/photo-1524758631624-e2822e304c36?q=80&w=800&auto=format&fit=crop",
+        "category": "테이블",
+        "description": "아이들의 학습 공간을 위한 안전하고 실용적인 키즈 데스크입니다.",
+        "scenes": ["kidsroom"],
+        "colors": ["pure-white", "golden-yellow", "pure-orange", "usm-green", "steel-blue"]
     }
 ]
