@@ -1,0 +1,50 @@
+[
+    {
+        "id": "1",
+        "name": "USM 할러 TV 유닛 3x2",
+        "price": "2,450,000",
+        "image": "https://images.unsplash.com/photo-1628157777174-88469e578c74?q=80&w=800&auto=format&fit=crop",
+        "category": "거실장",
+        "description": "넉넉한 수납 공간을 갖춘 모던하고 다재다능한 USM 할러 TV 유닛입니다."
+    },
+    {
+        "id": "2",
+        "name": "USM 할러 사이드보드 2x2",
+        "price": "1,850,000",
+        "image": "https://images.unsplash.com/photo-1605218427361-bca4f5358045?q=80&w=800&auto=format&fit=crop",
+        "category": "수납장",
+        "description": "거실이나 서재에 잘 어울리는 클래식한 2x2 구성의 수납장입니다."
+    },
+    {
+        "id": "3",
+        "name": "USM 할러 테이블 1500x750",
+        "price": "1,450,000",
+        "image": "https://images.unsplash.com/photo-1594228941785-5df1453267b2?q=80&w=800&auto=format&fit=crop",
+        "category": "테이블",
+        "description": "크롬 마감으로 우아함을 더한 다이닝 또는 작업용 테이블입니다."
+    },
+    {
+        "id": "4",
+        "name": "USM 할러 이동식 서랍장 1x3",
+        "price": "1,250,000",
+        "image": "https://images.unsplash.com/photo-1590136932598-c17849c719e7?q=80&w=800&auto=format&fit=crop",
+        "category": "서랍장",
+        "description": "유연한 사무실 정리를 위한 이동식 서랍장입니다."
+    },
+    {
+        "id": "5",
+        "name": "USM 할러 침대 협탁",
+        "price": "850,000",
+        "image": "https://images.unsplash.com/photo-1540574163026-643ea20ade25?q=80&w=800&auto=format&fit=crop",
+        "category": "침실",
+        "description": "하나의 서랍이 있는 컴팩트한 침대 협탁입니다."
+    },
+    {
+        "id": "6",
+        "name": "USM 할러 수납장 3x3",
+        "price": "3,250,000",
+        "image": "https://images.unsplash.com/photo-1600121848594-d8644e57abab?q=80&w=800&auto=format&fit=crop",
+        "category": "수납장",
+        "description": "최대 수납을 위한 넓은 공간의 3x3 수납 유닛입니다."
+    }
+]
