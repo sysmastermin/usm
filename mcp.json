@@ -1,5 +1,17 @@
 {
   "registries": {
     "@react-bits": "https://reactbits.dev/r/{name}.json"
+  },
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    }
   }
 }
