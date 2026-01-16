@@ -102,7 +102,7 @@ export default function ProductFilter({ products, onFilterChange }) {
         <>
             <div
                 ref={filterRef}
-                className="sticky top-20 z-30 bg-gradient-to-b from-gray-50/50 via-white to-gray-50/50 dark:from-gray-950/50 dark:via-black dark:to-gray-950/50 backdrop-blur-sm border-t border-b border-gray-200/80 dark:border-gray-800/80 py-6 md:py-8 mb-8 md:mb-12 shadow-sm"
+                className="md:sticky md:top-20 md:z-30 bg-gradient-to-b from-gray-50/50 via-white to-gray-50/50 dark:from-gray-950/50 dark:via-black dark:to-gray-950/50 backdrop-blur-sm border-t border-b border-gray-200/80 dark:border-gray-800/80 py-6 md:py-8 mb-8 md:mb-12 shadow-sm"
             >
                 <div className="container mx-auto px-4">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6 mb-6 md:mb-8">
