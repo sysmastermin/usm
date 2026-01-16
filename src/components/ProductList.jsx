@@ -62,20 +62,33 @@ export default function ProductList() {
 
             {/* Color Selection Section */}
             <div className="container mx-auto px-4 mb-12 md:mb-16">
-                <h2 className="text-xl md:text-2xl font-light text-gray-900 dark:text-white mb-6 md:mb-8 text-center">
-                    컬러로 선택하기
+                <h2 className="text-xl md:text-2xl font-light text-gray-900 dark:text-white mb-8 md:mb-10 text-center">
+                    컬러별 제품 보기
                 </h2>
-                <div className="flex flex-wrap justify-center gap-2 md:gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-6 md:gap-8">
                     {colors.map((c) => (
                         <Link
                             key={c.id}
                             to={`/color/${encodeURIComponent(c.id)}`}
-                            title={c.name}
-                            className={`w-8 h-8 md:w-10 md:h-10 rounded-full hover:scale-110 transition-transform ${c.border ? 'border border-gray-300 dark:border-gray-600' : ''}`}
-                            style={{ backgroundColor: c.color }}
-                        />
+                            className="group flex flex-col items-center"
+                        >
+                            <div
+                                className={`w-16 h-16 md:w-20 md:h-20 rounded-full mb-3 transition-all duration-300 ${
+                                    c.border ? 'border border-gray-200 dark:border-gray-700' : ''
+                                } group-hover:scale-110 group-hover:shadow-lg`}
+                                style={{ backgroundColor: c.color }}
+                            />
+                            <span className="text-xs md:text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white transition-colors text-center">
+                                {c.name}
+                            </span>
+                        </Link>
                     ))}
                 </div>
+            </div>
+
+            {/* Divider */}
+            <div className="container mx-auto px-4 mb-8 md:mb-12">
+                <div className="border-t border-gray-200 dark:border-gray-800"></div>
             </div>
 
             {/* Filter Section */}
