@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, Filter, Sparkles } from "lucide-react";
+import { X, Check, Filter, Sparkles, ChevronUp, ChevronDown } from "lucide-react";
 
 const scenes = ["living", "dining", "bedroom", "kidsroom", "homeoffice", "smalloffice", "washitsu"];
 const sceneNames = {
@@ -34,7 +34,10 @@ export default function ProductFilter({ products, onFilterChange }) {
     const [selectedScenes, setSelectedScenes] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [selectedColors, setSelectedColors] = useState([]);
+    const [isExpanded, setIsExpanded] = useState(true);
+    const [isSticky, setIsSticky] = useState(false);
     const filterRef = useRef(null);
+    const sentinelRef = useRef(null);
 
     // Get unique categories from products
     const categories = [...new Set(products.map((p) => p.category))];
@@ -92,44 +95,103 @@ export default function ProductFilter({ products, onFilterChange }) {
 
     const activeFilterCount = selectedScenes.length + selectedCategories.length + selectedColors.length;
 
+    // IntersectionObserver로 sticky 상태 감지
+    useEffect(() => {
+        if (!sentinelRef.current || !filterRef.current) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    // sentinel이 뷰포트에 보이지 않으면 sticky 상태
+                    setIsSticky(!entry.isIntersecting);
+                });
+            },
+            {
+                rootMargin: "-80px 0px 0px 0px", // 헤더 높이 고려 (top-20 = 80px)
+                threshold: 0,
+            }
+        );
+
+        observer.observe(sentinelRef.current);
+
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
+    // isSticky 변경 시 자동 접기/펼치기
+    useEffect(() => {
+        setIsExpanded(!isSticky);
+    }, [isSticky]);
+
     const scrollToFilter = () => {
         if (filterRef.current) {
             filterRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     };
 
+    const handleToggleExpand = () => {
+        setIsExpanded((prev) => !prev);
+    };
+
     return (
         <>
+            {/* Sentinel 요소 - sticky 상태 감지용 */}
+            <div ref={sentinelRef} className="h-0" />
+            
             <div
                 ref={filterRef}
-                className="md:sticky md:top-20 md:z-30 bg-gradient-to-b from-gray-50/50 via-white to-gray-50/50 dark:from-gray-950/50 dark:via-black dark:to-gray-950/50 backdrop-blur-sm border-t border-b border-gray-200/80 dark:border-gray-800/80 py-6 md:py-8 mb-8 md:mb-12 shadow-sm"
+                onMouseEnter={() => {
+                    // 접힌 상태에서 마우스 오버 시 자동으로 펼치기
+                    if (!isExpanded) {
+                        setIsExpanded(true);
+                    }
+                }}
+                onMouseLeave={() => {
+                    // 마우스가 벗어나면 다시 접기 (sticky 상태일 때만)
+                    if (isExpanded && isSticky) {
+                        setIsExpanded(false);
+                    }
+                }}
+                className="md:sticky md:top-20 md:z-30 bg-gradient-to-b from-gray-50/50 via-white to-gray-50/50 dark:from-gray-950/50 dark:via-black dark:to-gray-950/50 backdrop-blur-sm border-t border-gray-200/80 dark:border-gray-800/80 mb-8 md:mb-12 shadow-sm transition-all duration-300"
             >
                 <div className="container mx-auto px-4">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6 mb-6 md:mb-8">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                                <Filter className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-                            </div>
-                            <div>
-                                <h2 className="text-lg md:text-xl font-light text-gray-900 dark:text-white">필터</h2>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">원하는 조건을 선택하세요</p>
-                            </div>
-                        </div>
-                        {activeFilterCount > 0 && (
-                            <button
-                                onClick={handleReset}
-                                className="flex items-center gap-2 text-xs md:text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-all px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
+                    <AnimatePresence initial={false}>
+                        {isExpanded && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3, ease: "easeInOut" }}
+                                className="overflow-hidden"
                             >
-                                <X className="w-4 h-4" />
-                                <span>초기화</span>
-                                <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-600 rounded text-xs font-medium">
-                                    {activeFilterCount}
-                                </span>
-                            </button>
-                        )}
-                    </div>
+                                {/* 필터 헤더 */}
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6 mb-6 md:mb-8 pt-6 md:pt-8">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                                            <Filter className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg md:text-xl font-light text-gray-900 dark:text-white">필터</h2>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">원하는 조건을 선택하세요</p>
+                                        </div>
+                                    </div>
+                                    {activeFilterCount > 0 && (
+                                        <button
+                                            onClick={handleReset}
+                                            className="flex items-center gap-2 text-xs md:text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-all px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
+                                        >
+                                            <X className="w-4 h-4" />
+                                            <span>초기화</span>
+                                            <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-600 rounded text-xs font-medium">
+                                                {activeFilterCount}
+                                            </span>
+                                        </button>
+                                    )}
+                                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                                {/* 필터 내용 */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 pb-4 md:pb-6">
                         {/* Scene Filter */}
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
@@ -247,7 +309,34 @@ export default function ProductFilter({ products, onFilterChange }) {
                                 })}
                             </div>
                         </motion.div>
-                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* 하단 경계 화살표 디자인 - 항상 표시 */}
+                    <motion.button
+                        onClick={handleToggleExpand}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full border-t border-gray-200/80 dark:border-gray-800/80 py-3 md:py-4 flex items-center justify-center gap-2 md:gap-3 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-300 group cursor-pointer"
+                        aria-label={isExpanded ? "필터 접기" : "필터 펼치기"}
+                    >
+                        <div className="h-px w-8 md:w-12 bg-gray-300 dark:bg-gray-600 group-hover:bg-gray-400 dark:group-hover:bg-gray-500 transition-colors"></div>
+                        <motion.div
+                            initial={false}
+                            animate={{ rotate: isExpanded ? 0 : 180 }}
+                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                            className={`transition-transform ${isExpanded ? "group-hover:translate-y-0.5" : "group-hover:-translate-y-0.5"}`}
+                        >
+                            {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 md:w-5 md:h-5" />
+                            ) : (
+                                <ChevronUp className="w-4 h-4 md:w-5 md:h-5" />
+                            )}
+                        </motion.div>
+                        <div className="h-px w-8 md:w-12 bg-gray-300 dark:bg-gray-600 group-hover:bg-gray-400 dark:group-hover:bg-gray-500 transition-colors"></div>
+                    </motion.button>
                 </div>
             </div>
 
