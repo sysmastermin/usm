@@ -1,16 +1,28 @@
-# React + Vite
+# USM 온라인 스토어 프론트엔드
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+이 프로젝트는 **USM 모듈러 가구 온라인 스토어**의 프론트엔드 애플리케이션입니다.  
+React + Vite + Tailwind CSS 기반으로, 모바일 환경에 최적화된 UI를 제공합니다.
 
-Currently, two official plugins are available:
+## 주요 기술 스택
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- React (SPA)
+- Vite (번들러/개발 서버)
+- Tailwind CSS (스타일)
+- React Router (라우팅)
 
-## React Compiler
+## 로컬 개발
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+브라우저에서 `http://localhost:5173` 으로 접속합니다.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 프로덕션 빌드
+
+```bash
+npm run build
+```
+
+생성된 `dist` 디렉토리를 Vercel에서 호스팅합니다.
