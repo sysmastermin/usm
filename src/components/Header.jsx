@@ -1,10 +1,40 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ShoppingCart, Search, Menu, User } from "lucide-react";
+import { ShoppingCart, Search, Menu, User, Sun, Moon } from "lucide-react";
+import { useTheme } from "../context/ThemeContext";
 import SearchModal from "./SearchModal";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 
 export default function Header() {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const { theme, toggleTheme } = useTheme();
+    const [navCategories, setNavCategories] = useState([]);
+    const [isNavLoading, setIsNavLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchCategoriesForNav = async () => {
+            try {
+                setIsNavLoading(true);
+
+                const response = await fetch(`${API_BASE_URL}/categories`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch categories: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const categoriesFromApi = Array.isArray(data?.data) ? data.data : [];
+
+                setNavCategories(categoriesFromApi);
+            } catch {
+                setNavCategories([]);
+            } finally {
+                setIsNavLoading(false);
+            }
+        };
+
+        fetchCategoriesForNav();
+    }, []);
 
     return (
         <>
@@ -29,12 +59,41 @@ export default function Header() {
                         </Link>
 
                         {/* Desktop Nav */}
-                        <nav className="hidden md:flex gap-8 text-sm font-medium text-gray-600 dark:text-gray-300">
-                            <Link to="/" className="hover:text-black dark:hover:text-white transition-colors">카테고리</Link>
-                            <Link to="/scene" className="hover:text-black dark:hover:text-white transition-colors">씬(Scene)</Link>
-                            <Link to="#" className="hover:text-black dark:hover:text-white transition-colors">퀵쉽</Link>
-                            <Link to="/configurator" className="hover:text-black dark:hover:text-white transition-colors">3D 시뮬레이션</Link>
-                            <Link to="#" className="hover:text-black dark:hover:text-white transition-colors">매장 안내</Link>
+                        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600 dark:text-gray-300">
+                            <Link
+                                to="/"
+                                className="hover:text-black dark:hover:text-white transition-colors"
+                            >
+                                전체 상품
+                            </Link>
+                            {!isNavLoading && navCategories.length > 0 && (
+                                <>
+                                    {navCategories.slice(0, 4).map((cat) => {
+                                        const displayName = cat.name_ko || cat.name_ja || cat.slug;
+                                        return (
+                                            <Link
+                                                key={cat.id || cat.slug}
+                                                to={`/category/${encodeURIComponent(cat.slug)}`}
+                                                className="hover:text-black dark:hover:text-white transition-colors"
+                                            >
+                                                {displayName}
+                                            </Link>
+                                        );
+                                    })}
+                                </>
+                            )}
+                            <Link
+                                to="/scene"
+                                className="hover:text-black dark:hover:text-white transition-colors"
+                            >
+                                씬(Scene)
+                            </Link>
+                            <Link
+                                to="/configurator"
+                                className="hover:text-black dark:hover:text-white transition-colors"
+                            >
+                                3D 시뮬레이션
+                            </Link>
                         </nav>
 
                         {/* Icons */}
@@ -44,6 +103,18 @@ export default function Header() {
                                 className="p-2 text-gray-600 hover:text-black dark:text-gray-300 dark:hover:text-white transition-colors"
                             >
                                 <Search className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={toggleTheme}
+                                className="p-2 text-gray-600 hover:text-black dark:text-gray-300 dark:hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 dark:focus:ring-gray-600 focus:ring-offset-white dark:focus:ring-offset-black"
+                                aria-label={theme === "light" ? "다크 모드로 전환" : "라이트 모드로 전환"}
+                                title={theme === "light" ? "다크 모드" : "라이트 모드"}
+                            >
+                                {theme === "light" ? (
+                                    <Moon className="w-5 h-5" />
+                                ) : (
+                                    <Sun className="w-5 h-5" />
+                                )}
                             </button>
                             <button className="hidden md:block p-2 text-gray-600 hover:text-black dark:text-gray-300 dark:hover:text-white transition-colors">
                                 <User className="w-5 h-5" />

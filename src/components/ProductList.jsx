@@ -1,17 +1,23 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ProductCard from "./ProductCard";
 import products from "../data/mockProducts.json";
 import { Link } from "react-router-dom";
 import HeroCarousel from "./HeroCarousel";
 import ProductFilter from "./ProductFilter";
 
-const categories = [
-    { name: "거실장", image: "https://images.unsplash.com/photo-1628157777174-88469e578c74?q=80&w=400&auto=format&fit=crop" },
-    { name: "수납장", image: "https://images.unsplash.com/photo-1605218427361-bca4f5358045?q=80&w=400&auto=format&fit=crop" },
-    { name: "테이블", image: "https://images.unsplash.com/photo-1594228941785-5df1453267b2?q=80&w=400&auto=format&fit=crop" },
-    { name: "서랍장", image: "https://images.unsplash.com/photo-1590136932598-c17849c719e7?q=80&w=400&auto=format&fit=crop" },
-    { name: "침실", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?q=80&w=400&auto=format&fit=crop" }
-];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
+
+function buildImageUrl(imagePath) {
+    if (!imagePath) return "";
+    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+        return imagePath;
+    }
+    const origin = API_BASE_URL.replace(/\/api\/?$/, "");
+    if (imagePath.startsWith("/")) {
+        return `${origin}${imagePath}`;
+    }
+    return `${origin}/${imagePath}`;
+}
 
 const colors = [
     { id: "pure-white", name: "퓨어화이트", color: "#FFFFFF", border: true },
@@ -28,6 +34,44 @@ const colors = [
 
 export default function ProductList() {
     const [filteredProducts, setFilteredProducts] = useState(products);
+    const [categories, setCategories] = useState([]);
+    const [isCategoryLoading, setIsCategoryLoading] = useState(true);
+    const [categoryErrorMessage, setCategoryErrorMessage] = useState("");
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetchCategories = async () => {
+            try {
+                setIsCategoryLoading(true);
+                setCategoryErrorMessage("");
+
+                const response = await fetch(`${API_BASE_URL}/categories`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch categories: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const categoriesFromApi = Array.isArray(data?.data) ? data.data : [];
+
+                if (!isMounted) return;
+                setCategories(categoriesFromApi);
+            } catch (error) {
+                if (!isMounted) return;
+                setCategoryErrorMessage("카테고리 목록을 불러오는 중 오류가 발생했습니다.");
+                setCategories([]);
+            } finally {
+                if (!isMounted) return;
+                setIsCategoryLoading(false);
+            }
+        };
+
+        fetchCategories();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     return (
         <div className="pb-12">
@@ -39,25 +83,42 @@ export default function ProductList() {
                 <h2 className="text-xl md:text-2xl font-light text-gray-900 dark:text-white mb-6 md:mb-8 text-center">
                     카테고리별 탐색
                 </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
-                    {categories.map((cat) => (
-                        <Link
-                            key={cat.name}
-                            to={`/category/${encodeURIComponent(cat.name)}`}
-                            className="group relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800"
-                        >
-                            <img
-                                src={cat.image}
-                                alt={cat.name}
-                                className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                            />
-                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-white text-lg font-medium">{cat.name}</span>
-                            </div>
-                        </Link>
-                    ))}
-                </div>
+                {isCategoryLoading ? (
+                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                        카테고리 정보를 불러오는 중입니다...
+                    </div>
+                ) : categoryErrorMessage ? (
+                    <div className="py-8 text-center text-sm text-red-500">
+                        {categoryErrorMessage}
+                    </div>
+                ) : categories.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                        등록된 카테고리가 없습니다.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
+                        {categories.map((cat) => {
+                            const displayName = cat.name_ko || cat.name_ja || cat.slug;
+                            return (
+                            <Link
+                                key={cat.id || cat.slug}
+                                to={`/category/${encodeURIComponent(cat.slug)}`}
+                                className="group relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800"
+                            >
+                                <img
+                                    src={buildImageUrl(cat.image_url) || "https://images.unsplash.com/photo-1540574163026-643ea20ade25?q=80&w=400&auto=format&fit=crop"}
+                                    alt={displayName}
+                                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                                />
+                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-white text-lg font-medium">{displayName}</span>
+                                </div>
+                            </Link>
+                        );
+                        })}
+                    </div>
+                )}
             </div>
 
             {/* Color Selection Section */}
