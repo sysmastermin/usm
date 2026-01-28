@@ -91,7 +91,7 @@ export default function ProductFilter({ products, onFilterChange }) {
 
         onFilterChange(filtered);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedScenes, selectedCategories, selectedColors, products]);
+    }, [selectedScenes, selectedCategories, selectedColors]);
 
     const activeFilterCount = selectedScenes.length + selectedCategories.length + selectedColors.length;
 

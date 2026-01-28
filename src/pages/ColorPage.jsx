@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import ProductCard from "../components/ProductCard";
-import products from "../data/mockProducts.json";
+import { getProducts } from "../lib/api.js";
 
 const colorMap = {
     "pure-white": { name: "퓨어화이트", color: "#FFFFFF", border: true },
@@ -23,7 +24,45 @@ export default function ColorPage() {
     const { colorName } = useParams();
     const decodedColorName = decodeURIComponent(colorName || "");
 
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
     const colorInfo = colorMap[decodedColorName];
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                setLoading(true);
+                // 현재는 색상 정보를 크롤링하지 않으므로, 전체 상품을 가져와서
+                // 이름/설명에 색상명이 포함된 경우만 간단히 필터링
+                const allProducts = await getProducts({ limit: 100 });
+                const lowerColor = (colorInfo?.name || "").toLowerCase();
+
+                const filtered = allProducts.filter((p) => {
+                    const text =
+                        `${p.name_ja || ""} ${p.name_ko || ""} ${p.description_ja || ""} ${
+                            p.description_ko || ""
+                        }`.toLowerCase();
+                    return lowerColor && text.includes(lowerColor);
+                });
+
+                setProducts(filtered);
+            } catch (err) {
+                console.error("컬러별 상품 로딩 실패:", err);
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        if (colorInfo) {
+            fetchData();
+        } else {
+            setProducts([]);
+            setLoading(false);
+        }
+    }, [decodedColorName, colorInfo]);
 
     if (!colorInfo) {
         return (
@@ -37,10 +76,6 @@ export default function ColorPage() {
             </div>
         );
     }
-
-    const colorProducts = products.filter(
-        (product) => product.colors && product.colors.includes(decodedColorName)
-    );
 
     return (
         <div className="pb-12">
@@ -64,18 +99,44 @@ export default function ColorPage() {
                 </div>
 
                 {/* Products Count */}
-                {colorProducts.length > 0 ? (
+                {loading ? (
+                    <div className="text-center py-12 md:py-16">
+                        <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">
+                            상품을 불러오는 중입니다...
+                        </p>
+                    </div>
+                ) : error ? (
+                    <div className="text-center py-12 md:py-16">
+                        <p className="text-sm md:text-base text-red-500 dark:text-red-400">
+                            오류: {error}
+                        </p>
+                    </div>
+                ) : products.length > 0 ? (
                     <>
                         <div className="mb-4 md:mb-6">
                             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
-                                {colorProducts.length}개의 제품이 있습니다
+                                {products.length}개의 제품이 있습니다
                             </p>
                         </div>
 
                         {/* Products Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-x-8 md:gap-y-12">
-                            {colorProducts.map((product) => (
-                                <ProductCard key={product.id} product={product} />
+                            {products.map((product) => (
+                                <ProductCard
+                                    key={product.id}
+                                    product={{
+                                        id: product.legacy_id || product.id,
+                                        name: product.name_ko || product.name_ja,
+                                        price: product.price
+                                            ? `¥${parseInt(product.price, 10).toLocaleString()}`
+                                            : null,
+                                        image: product.image_url,
+                                        category:
+                                            product.category_name_ko || product.category_name_ja,
+                                        description:
+                                            product.description_ko || product.description_ja,
+                                    }}
+                                />
                             ))}
                         </div>
                     </>

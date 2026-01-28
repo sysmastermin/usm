@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Search as SearchIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import products from "../data/mockProducts.json";
 import { motion, AnimatePresence } from "framer-motion";
+import { getProducts } from "../lib/api.js";
 
 export default function SearchModal({ isOpen, onClose }) {
     const [query, setQuery] = useState("");
     const [searchResults, setSearchResults] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
     const inputRef = useRef(null);
     const navigate = useNavigate();
@@ -17,23 +18,37 @@ export default function SearchModal({ isOpen, onClose }) {
         }
     }, [isOpen]);
 
+    // 검색어 변경 시 API 검색 (간단 디바운싱)
     useEffect(() => {
-        if (query.trim() === "") {
-            setSearchResults([]);
-            return;
+        let timeoutId;
+
+        async function search() {
+            const trimmed = query.trim();
+            if (trimmed === "") {
+                setSearchResults([]);
+                setSelectedIndex(-1);
+                return;
+            }
+
+            try {
+                setLoading(true);
+                const products = await getProducts({ search: trimmed, limit: 20 });
+                setSearchResults(products);
+                setSelectedIndex(-1);
+            } catch (err) {
+                console.error("검색 실패:", err);
+                setSearchResults([]);
+                setSelectedIndex(-1);
+            } finally {
+                setLoading(false);
+            }
         }
 
-        const searchTerm = query.toLowerCase();
-        const results = products.filter((product) => {
-            return (
-                product.name.toLowerCase().includes(searchTerm) ||
-                product.category.toLowerCase().includes(searchTerm) ||
-                product.description.toLowerCase().includes(searchTerm)
-            );
-        });
+        timeoutId = setTimeout(search, 300);
 
-        setSearchResults(results);
-        setSelectedIndex(-1);
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
     }, [query]);
 
     useEffect(() => {
@@ -52,10 +67,10 @@ export default function SearchModal({ isOpen, onClose }) {
                 setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
             } else if (e.key === "Enter" && selectedIndex >= 0) {
                 e.preventDefault();
-                handleProductClick(searchResults[selectedIndex].id);
+                handleProductClick(searchResults[selectedIndex]);
             } else if (e.key === "Enter" && searchResults.length === 1) {
                 e.preventDefault();
-                handleProductClick(searchResults[0].id);
+                handleProductClick(searchResults[0]);
             }
         };
 
@@ -75,8 +90,9 @@ export default function SearchModal({ isOpen, onClose }) {
         };
     }, [isOpen]);
 
-    const handleProductClick = (productId) => {
-        navigate(`/product/${productId}`);
+    const handleProductClick = (product) => {
+        const targetId = product.legacy_id || product.id;
+        navigate(`/product/${targetId}`);
         onClose();
         setQuery("");
     };
@@ -125,6 +141,10 @@ export default function SearchModal({ isOpen, onClose }) {
                             <div className="p-6 md:p-8 text-center text-gray-500 dark:text-gray-400">
                                 <p className="text-sm md:text-base">검색어를 입력하세요</p>
                             </div>
+                        ) : loading ? (
+                            <div className="p-6 md:p-8 text-center text-gray-500 dark:text-gray-400">
+                                <p className="text-sm md:text-base">검색 중...</p>
+                            </div>
                         ) : searchResults.length === 0 ? (
                             <div className="p-6 md:p-8 text-center text-gray-500 dark:text-gray-400">
                                 <p className="text-sm md:text-base">검색 결과가 없습니다</p>
@@ -134,7 +154,7 @@ export default function SearchModal({ isOpen, onClose }) {
                                 {searchResults.map((product, index) => (
                                     <li key={product.id}>
                                         <button
-                                            onClick={() => handleProductClick(product.id)}
+                                            onClick={() => handleProductClick(product)}
                                             className={`w-full text-left p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors ${
                                                 index === selectedIndex
                                                     ? "bg-gray-100 dark:bg-gray-900"
@@ -142,20 +162,24 @@ export default function SearchModal({ isOpen, onClose }) {
                                             }`}
                                         >
                                             <div className="flex items-center gap-3 md:gap-4">
-                                                <img
-                                                    src={product.image}
-                                                    alt={product.name}
-                                                    className="w-12 h-12 md:w-16 md:h-16 object-cover flex-shrink-0 rounded-sm"
-                                                />
+                                                {product.image_url && (
+                                                    <img
+                                                        src={product.image_url}
+                                                        alt={product.name_ko || product.name_ja}
+                                                        className="w-12 h-12 md:w-16 md:h-16 object-cover flex-shrink-0 rounded-sm"
+                                                    />
+                                                )}
                                                 <div className="flex-1 min-w-0">
                                                     <h3 className="text-sm md:text-base font-medium text-gray-900 dark:text-white truncate">
-                                                        {product.name}
+                                                        {product.name_ko || product.name_ja}
                                                     </h3>
                                                     <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 truncate">
-                                                        {product.category}
+                                                        {product.category_name_ko || product.category_name_ja}
                                                     </p>
                                                     <p className="text-xs md:text-sm font-semibold text-gray-900 dark:text-white mt-1">
-                                                        {product.price}원
+                                                        {product.price
+                                                            ? `¥${parseInt(product.price, 10).toLocaleString()}`
+                                                            : ""}
                                                     </p>
                                                 </div>
                                             </div>

@@ -1,17 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ProductCard from "./ProductCard";
-import products from "../data/mockProducts.json";
 import { Link } from "react-router-dom";
 import HeroCarousel from "./HeroCarousel";
 import ProductFilter from "./ProductFilter";
-
-const categories = [
-    { name: "거실장", image: "https://images.unsplash.com/photo-1628157777174-88469e578c74?q=80&w=400&auto=format&fit=crop" },
-    { name: "수납장", image: "https://images.unsplash.com/photo-1605218427361-bca4f5358045?q=80&w=400&auto=format&fit=crop" },
-    { name: "테이블", image: "https://images.unsplash.com/photo-1594228941785-5df1453267b2?q=80&w=400&auto=format&fit=crop" },
-    { name: "서랍장", image: "https://images.unsplash.com/photo-1590136932598-c17849c719e7?q=80&w=400&auto=format&fit=crop" },
-    { name: "침실", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?q=80&w=400&auto=format&fit=crop" }
-];
+import { getCategories, getProducts } from "../lib/api.js";
 
 const colors = [
     { id: "pure-white", name: "퓨어화이트", color: "#FFFFFF", border: true },
@@ -27,7 +19,65 @@ const colors = [
 ];
 
 export default function ProductList() {
-    const [filteredProducts, setFilteredProducts] = useState(products);
+    const [categories, setCategories] = useState([]);
+    const [products, setProducts] = useState([]);
+    const [filteredProducts, setFilteredProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                setLoading(true);
+                const [categoriesData, productsData] = await Promise.all([
+                    getCategories(),
+                    getProducts(),
+                ]);
+                
+                setCategories(categoriesData);
+                setProducts(productsData);
+                setFilteredProducts(productsData);
+            } catch (err) {
+                console.error('데이터 로딩 실패:', err);
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
+
+    // useMemo를 컴포넌트 최상위로 이동
+    const transformedProducts = useMemo(() => products.map((p) => ({
+        id: p.legacy_id || p.id,
+        name: p.name_ko || p.name_ja,
+        price: p.price,
+        image: p.image_url,
+        category: p.category_name_ko || p.category_name_ja,
+        description: p.description_ko || p.description_ja,
+        colors: [],
+        scenes: [],
+    })), [products]);
+
+    if (loading) {
+        return (
+            <div className="pb-12">
+                <div className="container mx-auto px-4 py-20 text-center">
+                    <p className="text-gray-500 dark:text-gray-400">로딩 중...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="pb-12">
+                <div className="container mx-auto px-4 py-20 text-center">
+                    <p className="text-red-500 dark:text-red-400">오류: {error}</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="pb-12">
@@ -42,18 +92,23 @@ export default function ProductList() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
                     {categories.map((cat) => (
                         <Link
-                            key={cat.name}
-                            to={`/category/${encodeURIComponent(cat.name)}`}
-                            className="group relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800"
+                            key={cat.id || cat.slug}
+                            to={`/category/${encodeURIComponent(cat.slug)}`}
+                            className="group relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800 block"
+                            onClick={() => {
+                                console.log("카테고리 클릭:", cat.slug);
+                            }}
                         >
-                            <img
-                                src={cat.image}
-                                alt={cat.name}
-                                className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                            />
-                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-white text-lg font-medium">{cat.name}</span>
+                            {cat.image_url && (
+                                <img
+                                    src={cat.image_url}
+                                    alt={cat.name_ko || cat.name_ja}
+                                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 pointer-events-none"
+                                />
+                            )}
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors pointer-events-none" />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <span className="text-white text-lg font-medium">{cat.name_ko || cat.name_ja}</span>
                             </div>
                         </Link>
                     ))}
@@ -92,7 +147,18 @@ export default function ProductList() {
             </div>
 
             {/* Filter Section */}
-            <ProductFilter products={products} onFilterChange={setFilteredProducts} />
+            <ProductFilter
+                products={transformedProducts}
+                onFilterChange={(filtered) => {
+                    // filtered는 ProductFilter에서 사용하는 단순화된 구조이므로,
+                    // 원본 products와 id(legacy_id)를 기준으로 다시 매칭
+                    const ids = new Set(filtered.map((f) => f.id));
+                    const mapped = products.filter(
+                        (p) => ids.has(p.legacy_id || p.id)
+                    );
+                    setFilteredProducts(mapped);
+                }}
+            />
 
             {/* Products Section */}
             <div id="products" className="container mx-auto px-4">
@@ -111,7 +177,19 @@ export default function ProductList() {
                 {filteredProducts.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-x-8 md:gap-y-12">
                         {filteredProducts.map((product) => (
-                            <ProductCard key={product.id} product={product} />
+                            <ProductCard
+                                key={product.id}
+                                product={{
+                                    id: product.legacy_id || product.id,
+                                    name: product.name_ko || product.name_ja,
+                                    price: product.price
+                                        ? `¥${parseInt(product.price, 10).toLocaleString()}`
+                                        : null,
+                                    image: product.image_url,
+                                    category: product.category_name_ko || product.category_name_ja,
+                                    description: product.description_ko || product.description_ja,
+                                }}
+                            />
                         ))}
                     </div>
                 ) : (

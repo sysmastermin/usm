@@ -1,9 +1,10 @@
+import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 import ProductCard from "../components/ProductCard";
 import sceneImages from "../data/sceneImages.json";
-import products from "../data/mockProducts.json";
+import { getProducts } from "../lib/api.js";
 
 const sceneNames = {
     living: "거실",
@@ -17,12 +18,49 @@ const sceneNames = {
 export default function SceneDetailPage() {
     const { sceneId, imageId } = useParams();
     const navigate = useNavigate();
+    const [sceneProducts, setSceneProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     const sceneImageList = sceneImages[sceneId] || [];
     const sceneImage = sceneImageList.find((img) => img.id === imageId);
-    const sceneProducts = products.filter(
-        (product) => product.scenes && product.scenes.includes(sceneId)
-    );
+
+    useEffect(() => {
+        async function fetchProducts() {
+            try {
+                setLoading(true);
+                const allProducts = await getProducts({ limit: 100 });
+                
+                // 씬 이름 매핑
+                const sceneNameMap = {
+                    living: ['거실', 'リビング', 'living'],
+                    dining: ['주방', 'ダイニング', 'dining', '다이닝'],
+                    bedroom: ['침실', 'ベッドルーム', 'bedroom'],
+                    kidsroom: ['키즈룸', 'キッズルーム', 'kidsroom', 'kids'],
+                    homeoffice: ['오피스텔', 'ホームオフィス', 'homeoffice', 'home office'],
+                    smalloffice: ['스몰오피스', 'スモールオフィス', 'smalloffice', 'small office']
+                };
+
+                const sceneKeywords = sceneNameMap[sceneId] || [];
+                
+                // 씬 키워드가 포함된 상품 필터링
+                const filtered = allProducts.filter((product) => {
+                    const searchText = `${product.name_ko || ''} ${product.name_ja || ''} ${product.description_ko || ''} ${product.description_ja || ''}`.toLowerCase();
+                    return sceneKeywords.some(keyword => searchText.includes(keyword.toLowerCase()));
+                });
+
+                setSceneProducts(filtered);
+            } catch (err) {
+                console.error('씬 상품 로딩 실패:', err);
+                setSceneProducts([]);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        if (sceneId) {
+            fetchProducts();
+        }
+    }, [sceneId]);
 
     if (!sceneImage) {
         return (
@@ -74,7 +112,11 @@ export default function SceneDetailPage() {
             </motion.div>
 
             {/* Products Section */}
-            {sceneProducts.length > 0 && (
+            {loading ? (
+                <div className="container mx-auto px-4 text-center py-12">
+                    <p className="text-gray-500 dark:text-gray-400">상품을 불러오는 중...</p>
+                </div>
+            ) : sceneProducts.length > 0 ? (
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -91,10 +133,28 @@ export default function SceneDetailPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-x-8 md:gap-y-12">
                         {sceneProducts.map((product) => (
-                            <ProductCard key={product.id} product={product} />
+                            <ProductCard
+                                key={product.legacy_id || product.id}
+                                product={{
+                                    id: product.legacy_id || product.id,
+                                    name: product.name_ko || product.name_ja,
+                                    price: product.price
+                                        ? `¥${parseInt(product.price, 10).toLocaleString()}`
+                                        : null,
+                                    image: product.image_url,
+                                    category: product.category_name_ko || product.category_name_ja,
+                                    description: product.description_ko || product.description_ja,
+                                }}
+                            />
                         ))}
                     </div>
                 </motion.div>
+            ) : (
+                <div className="container mx-auto px-4 text-center py-12">
+                    <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">
+                        이 씬에 해당하는 제품이 없습니다.
+                    </p>
+                </div>
             )}
 
             {/* Contact Section */}
