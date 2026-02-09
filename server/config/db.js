@@ -3,19 +3,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 환경변수 디버깅 (비밀번호는 마스킹)
-console.log('환경변수 확인:');
-console.log('DB_HOST:', process.env.DB_HOST);
-console.log('DB_USER:', process.env.DB_USER);
-console.log('DB_PASS:', process.env.DB_PASS ? '***설정됨***' : '❌ 없음');
-console.log('DB_NAME:', process.env.DB_NAME);
-
 // 비밀번호에서 따옴표 제거 (dotenv가 따옴표를 포함해서 읽을 수 있음)
-const cleanPassword = (process.env.DB_PASS || '@allin#am1071').replace(/^["']|["']$/g, '');
+const cleanPassword = (
+  process.env.DB_PASS || '@allin#am1071'
+).replace(/^["']|["']$/g, '');
 
 const config = {
-  server: process.env.DB_HOST?.split(',')[0] || '59.23.231.197',
-  port: parseInt(process.env.DB_HOST?.split(',')[1] || '14103'),
+  server:
+    process.env.DB_HOST?.split(',')[0] || '59.23.231.197',
+  port: parseInt(
+    process.env.DB_HOST?.split(',')[1] || '14103'
+  ),
   database: process.env.DB_NAME || 'usm',
   user: process.env.DB_USER || '1stplatfor_sql',
   password: cleanPassword,
@@ -25,30 +23,79 @@ const config = {
     enableArithAbort: true,
   },
   pool: {
-    max: 10,
+    max: 20,
     min: 0,
     idleTimeoutMillis: 30000,
   },
+  connectionTimeout: 15000,
+  requestTimeout: 30000,
 };
 
 let pool = null;
 
+/** 최대 재시도 횟수 */
+const MAX_RETRIES = 3;
+
+/**
+ * DB 커넥션 풀 획득 (재시도 로직 포함)
+ * - 풀이 없거나 연결이 끊긴 경우 자동 재연결
+ * - 최대 3회 재시도 (exponential backoff)
+ */
 export async function getPool() {
-  if (!pool) {
+  if (pool?.connected) {
+    return pool;
+  }
+
+  // 기존 풀이 있지만 연결이 끊긴 경우 정리
+  if (pool) {
+    try {
+      await pool.close();
+    } catch {
+      // 이미 닫혔거나 에러 무시
+    }
+    pool = null;
+  }
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       pool = await sql.connect(config);
-      console.log('✅ MSSQL 연결 성공');
+
+      // 풀 에러 이벤트 핸들링 (연결 끊김 자동 감지)
+      pool.on('error', (err) => {
+        console.error('DB pool error:', err.message);
+        pool = null;
+      });
+
+      console.log('MSSQL 연결 성공');
+      return pool;
     } catch (error) {
-      console.error('❌ MSSQL 연결 실패:', error);
-      throw error;
+      console.error(
+        `MSSQL 연결 실패 (시도 ${attempt}/${MAX_RETRIES}):`,
+        error.message
+      );
+      pool = null;
+
+      if (attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`${delay}ms 후 재시도...`);
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        throw error;
+      }
     }
   }
-  return pool;
 }
 
+/**
+ * DB 커넥션 풀 닫기
+ */
 export async function closePool() {
   if (pool) {
-    await pool.close();
+    try {
+      await pool.close();
+    } catch {
+      // 닫기 실패 무시
+    }
     pool = null;
     console.log('MSSQL 연결 종료');
   }

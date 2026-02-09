@@ -1,12 +1,15 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as BABYLON from "babylonjs";
 import "@babylonjs/loaders";
+import { HALLER_GLTF_BASE_URL } from "../data/hallerConfig";
 
-export default function Haller3DCanvas({
-  configuration,
-  selectedModuleId,
-  onSelectModule,
-}) {
+/** Phase B: true로 전환 시 glTF 로드 파이프라인 사용. 자산은 HALLER_GLTF_BASE_URL + frontType별 경로. */
+const USE_GLTF_MODELS = false;
+
+const Haller3DCanvas = forwardRef(function Haller3DCanvas(
+  { configuration, selectedModuleId, onSelectModule },
+  ref
+) {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const sceneRef = useRef(null);
@@ -125,6 +128,130 @@ export default function Haller3DCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * frontType별 메쉬 생성 (Phase A: 프리미티브).
+   * Phase B: USE_GLTF_MODELS && HALLER_GLTF_BASE_URL일 때
+   * SceneLoader.ImportMeshAsync로 glTF 로드 후 노드에 부착·스케일 적용.
+   */
+  const buildModuleMeshes = (
+    scene,
+    node,
+    id,
+    frontType,
+    color,
+    isSelected,
+    shadowGenerator
+  ) => {
+    void USE_GLTF_MODELS;
+    void HALLER_GLTF_BASE_URL;
+    node.getChildren().forEach((c) => c.dispose());
+
+    const frame = BABYLON.MeshBuilder.CreateBox(
+      `moduleFrame-${id}`,
+      {
+        width: 1.02,
+        height: 1.02,
+        depth: 1.02,
+        sideOrientation: BABYLON.Mesh.DOUBLESIDE,
+      },
+      scene
+    );
+    const frameMat = new BABYLON.StandardMaterial(
+      `moduleFrameMaterial-${id}`,
+      scene
+    );
+    frameMat.diffuseColor = new BABYLON.Color3(0.85, 0.85, 0.85);
+    frameMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+    frameMat.wireframe = true;
+    frameMat.backFaceCulling = false;
+    frame.material = frameMat;
+    frame.parent = node;
+
+    const body = BABYLON.MeshBuilder.CreateBox(
+      `moduleBody-${id}`,
+      { width: 0.96, height: 0.96, depth: 0.96 },
+      scene
+    );
+    const bodyMat = new BABYLON.StandardMaterial(
+      `moduleBodyMaterial-${id}`,
+      scene
+    );
+    try {
+      bodyMat.diffuseColor = BABYLON.Color3.FromHexString(color);
+    } catch {
+      bodyMat.diffuseColor = BABYLON.Color3.FromHexString("#ffffff");
+    }
+    bodyMat.specularColor = new BABYLON.Color3(0.25, 0.25, 0.25);
+    if (frontType === "glass") {
+      bodyMat.alpha = 0.65;
+      bodyMat.backFaceCulling = false;
+    }
+    body.material = bodyMat;
+    body.parent = node;
+
+    let doorPanel = null;
+    let drawerFront = null;
+    if (frontType === "door") {
+      doorPanel = BABYLON.MeshBuilder.CreatePlane(
+        `moduleDoor-${id}`,
+        { size: 0.94, sideOrientation: BABYLON.Mesh.DOUBLESIDE },
+        scene
+      );
+      doorPanel.position.z = 0.48;
+      const doorMat = new BABYLON.StandardMaterial(
+        `moduleDoorMaterial-${id}`,
+        scene
+      );
+      try {
+        doorMat.diffuseColor = BABYLON.Color3.FromHexString(color);
+      } catch {
+        doorMat.diffuseColor = BABYLON.Color3.FromHexString("#ffffff");
+      }
+      doorMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+      doorPanel.material = doorMat;
+      doorPanel.parent = node;
+      if (shadowGenerator) shadowGenerator.addShadowCaster(doorPanel);
+    }
+
+    if (frontType === "drawer") {
+      drawerFront = BABYLON.MeshBuilder.CreateBox(
+        `moduleDrawerFront-${id}`,
+        { width: 0.94, height: 0.3, depth: 0.04 },
+        scene
+      );
+      drawerFront.position.y = -0.33;
+      drawerFront.position.z = 0.48;
+      const drawerMat = new BABYLON.StandardMaterial(
+        `moduleDrawerMaterial-${id}`,
+        scene
+      );
+      try {
+        drawerMat.diffuseColor = BABYLON.Color3.FromHexString(color);
+      } catch {
+        drawerMat.diffuseColor = BABYLON.Color3.FromHexString("#ffffff");
+      }
+      drawerMat.specularColor = new BABYLON.Color3(0.25, 0.25, 0.25);
+      drawerFront.material = drawerMat;
+      drawerFront.parent = node;
+      if (shadowGenerator) shadowGenerator.addShadowCaster(drawerFront);
+    }
+
+    if (shadowGenerator) {
+      shadowGenerator.addShadowCaster(frame);
+      shadowGenerator.addShadowCaster(body);
+    }
+
+    const colorMeshes = [body];
+    if (doorPanel) colorMeshes.push(doorPanel);
+    if (drawerFront) colorMeshes.push(drawerFront);
+    colorMeshes.forEach((mesh) => {
+      if (!mesh || !(mesh.material instanceof BABYLON.StandardMaterial)) return;
+      mesh.material.emissiveColor = isSelected
+        ? BABYLON.Color3.FromHexString("#fbbf24")
+        : new BABYLON.Color3(0, 0, 0);
+    });
+  };
+
   useEffect(() => {
     const scene = sceneRef.current;
     const shadowGenerator = shadowGeneratorRef.current;
@@ -156,6 +283,7 @@ export default function Haller3DCanvas({
         height = 1,
         depth = 1,
         color = "#ffffff",
+        frontType = "open",
         gridX = 0,
         gridY = 0,
         gridZ = 0,
@@ -171,61 +299,27 @@ export default function Haller3DCanvas({
       const z = gridZ * unit;
 
       let node = nodeMap.get(id);
+      const needsRebuild =
+        !node ||
+        (node.metadata?.lastFrontType !== frontType);
 
       if (!node) {
         node = new BABYLON.TransformNode(`moduleNode-${id}`, scene);
         node.metadata = { moduleId: id };
-
-        const frame = BABYLON.MeshBuilder.CreateBox(
-          `moduleFrame-${id}`,
-          {
-            width: 1.02,
-            height: 1.02,
-            depth: 1.02,
-            sideOrientation: BABYLON.Mesh.DOUBLESIDE,
-          },
-          scene
-        );
-        const frameMaterial = new BABYLON.StandardMaterial(
-          `moduleFrameMaterial-${id}`,
-          scene
-        );
-        frameMaterial.diffuseColor = new BABYLON.Color3(0.85, 0.85, 0.85);
-        frameMaterial.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
-        frameMaterial.emissiveColor = new BABYLON.Color3(0.0, 0.0, 0.0);
-        frameMaterial.wireframe = true;
-        frameMaterial.backFaceCulling = false;
-        frame.material = frameMaterial;
-        frame.parent = node;
-
-        const body = BABYLON.MeshBuilder.CreateBox(
-          `moduleBody-${id}`,
-          {
-            width: 0.96,
-            height: 0.96,
-            depth: 0.96,
-          },
-          scene
-        );
-        const bodyMaterial = new BABYLON.StandardMaterial(
-          `moduleBodyMaterial-${id}`,
-          scene
-        );
-        try {
-          bodyMaterial.diffuseColor = BABYLON.Color3.FromHexString(color);
-        } catch {
-          bodyMaterial.diffuseColor = BABYLON.Color3.FromHexString("#ffffff");
-        }
-        bodyMaterial.specularColor = new BABYLON.Color3(0.25, 0.25, 0.25);
-        body.material = bodyMaterial;
-        body.parent = node;
-
-        if (shadowGenerator) {
-          shadowGenerator.addShadowCaster(frame);
-          shadowGenerator.addShadowCaster(body);
-        }
-
         nodeMap.set(id, node);
+      }
+
+      if (needsRebuild) {
+        node.metadata.lastFrontType = frontType;
+        buildModuleMeshes(
+          scene,
+          node,
+          id,
+          frontType,
+          color,
+          selectedModuleId === id,
+          shadowGenerator
+        );
       }
 
       node.scaling = new BABYLON.Vector3(safeWidth, safeHeight, safeDepth);
@@ -234,28 +328,36 @@ export default function Haller3DCanvas({
       const children = node.getChildren();
       children.forEach((child) => {
         if (!(child instanceof BABYLON.Mesh)) return;
-
-        if (child.name.startsWith("moduleBody-")) {
-          if (child.material instanceof BABYLON.StandardMaterial) {
-            try {
-              child.material.diffuseColor = BABYLON.Color3.FromHexString(color);
-            } catch {
-              child.material.diffuseColor =
-                BABYLON.Color3.FromHexString("#ffffff");
-            }
-
-            if (selectedModuleId && id === selectedModuleId) {
-              child.material.emissiveColor =
-                BABYLON.Color3.FromHexString("#fbbf24");
-            } else {
-              child.material.emissiveColor =
-                BABYLON.Color3.FromHexString("#000000");
-            }
+        const isColorMesh =
+          child.name.startsWith("moduleBody-") ||
+          child.name.startsWith("moduleDoor-") ||
+          child.name.startsWith("moduleDrawerFront-");
+        if (isColorMesh && child.material instanceof BABYLON.StandardMaterial) {
+          try {
+            child.material.diffuseColor = BABYLON.Color3.FromHexString(color);
+          } catch {
+            child.material.diffuseColor =
+              BABYLON.Color3.FromHexString("#ffffff");
           }
+          if (child.material.alpha !== undefined && frontType === "glass") {
+            child.material.alpha = 0.65;
+          }
+          child.material.emissiveColor =
+            selectedModuleId && id === selectedModuleId
+              ? BABYLON.Color3.FromHexString("#fbbf24")
+              : new BABYLON.Color3(0, 0, 0);
         }
       });
     });
   }, [configuration, selectedModuleId, onSelectModule]);
+
+  useImperativeHandle(ref, () => ({
+    captureAsDataURL(mimeType = "image/png") {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      return canvas.toDataURL(mimeType);
+    },
+  }));
 
   return (
     <canvas
@@ -263,4 +365,6 @@ export default function Haller3DCanvas({
       className="w-full h-[400px] md:h-[520px] bg-gray-900 rounded-sm"
     />
   );
-}
+});
+
+export default Haller3DCanvas;

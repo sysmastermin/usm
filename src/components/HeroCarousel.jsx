@@ -1,51 +1,73 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import sceneImages from "../data/sceneImages.json";
 
-const slides = [
-    {
-        id: 1,
-        image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=1600&auto=format&fit=crop",
-        title: "USM 모듈러 가구",
-        subtitle: "시대를 초월한 스위스 디자인. 당신만의 공간을 완성하세요.",
-        link: "#products"
-    },
-    {
-        id: 2,
-        image: "https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=1600&auto=format&fit=crop",
-        title: "홈 오피스 컬렉션",
-        subtitle: "창의적인 영감을 주는 업무 공간을 위한 완벽한 솔루션.",
-        link: "#"
-    },
-    {
-        id: 3,
-        image: "https://images.unsplash.com/photo-1618220179428-22790b461013?q=80&w=1600&auto=format&fit=crop",
-        title: "다채로운 리빙룸",
-        subtitle: "14가지 시그니처 컬러로 거실에 생기를 불어넣으세요.",
-        link: "#"
-    },
-    {
-        id: 4,
-        image: "https://images.unsplash.com/photo-1616486338812-3dadae4b4f9d?q=80&w=1600&auto=format&fit=crop",
-        title: "스마트한 수납 솔루션",
-        subtitle: "기능성과 아름다움을 겸비한 무한한 확장성.",
-        link: "#"
-    }
-];
+const SLIDE_COUNT = 5;
+
+const categoryMeta = {
+  living: {
+    name: "거실",
+    subtitle: "편안하고 아늑한 거실 공간을 위한 USM 가구 컬렉션",
+  },
+  dining: {
+    name: "주방",
+    subtitle: "가족과 함께하는 식사 시간을 더욱 특별하게",
+  },
+  bedroom: {
+    name: "침실",
+    subtitle: "편안한 수면과 휴식을 위한 침실 공간 연출",
+  },
+  kidsroom: {
+    name: "키즈룸",
+    subtitle: "아이들의 창의력과 상상력을 키워주는 공간",
+  },
+  homeoffice: {
+    name: "오피스텔",
+    subtitle: "효율적으로 일할 수 있는 전문적인 업무 공간",
+  },
+  smalloffice: {
+    name: "스몰오피스",
+    subtitle: "작은 공간에도 최적화된 사무실 솔루션",
+  },
+};
 
 export default function HeroCarousel() {
     const [current, setCurrent] = useState(0);
+
+    // 모든 씬 이미지를 평탄화하고 랜덤 셔플하여 슬라이드 생성
+    const slides = useMemo(() => {
+        const allImages = Object.entries(sceneImages).flatMap(
+            ([sceneId, images]) =>
+                images.map((img) => ({ ...img, sceneId }))
+        );
+        const shuffled = [...allImages]
+            .sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, SLIDE_COUNT).map((img) => ({
+            id: img.id,
+            image: img.image,
+            title: categoryMeta[img.sceneId]?.name
+                + " 컬렉션",
+            subtitle: categoryMeta[img.sceneId]?.subtitle,
+            link: "/scene",
+            sceneId: img.sceneId,
+        }));
+    }, []);
 
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrent((prev) => (prev + 1) % slides.length);
         }, 5000);
         return () => clearInterval(timer);
-    }, []);
+    }, [slides.length]);
 
-    const nextSlide = () => setCurrent((prev) => (prev + 1) % slides.length);
-    const prevSlide = () => setCurrent((prev) => (prev - 1 + slides.length) % slides.length);
+    const nextSlide = () =>
+        setCurrent((prev) => (prev + 1) % slides.length);
+    const prevSlide = () =>
+        setCurrent((prev) =>
+            (prev - 1 + slides.length) % slides.length
+        );
 
     return (
         <div className="relative h-[70vh] min-h-[500px] mb-16 overflow-hidden bg-gray-100 dark:bg-gray-900 group">
@@ -83,6 +105,9 @@ export default function HeroCarousel() {
                     </p>
                     <Link
                         to={slides[current].link}
+                        state={{
+                            sceneId: slides[current].sceneId,
+                        }}
                         className="inline-block bg-white text-black px-8 py-3 font-medium hover:bg-gray-100 transition-colors"
                     >
                         자세히 보기

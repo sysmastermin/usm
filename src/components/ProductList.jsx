@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import ProductCard from "./ProductCard";
-import products from "../data/mockProducts.json";
 import { Link } from "react-router-dom";
 import HeroCarousel from "./HeroCarousel";
 import ProductFilter from "./ProductFilter";
@@ -19,6 +18,18 @@ function buildImageUrl(imagePath) {
     return `${origin}/${imagePath}`;
 }
 
+function mapApiProductToFront(p) {
+    return {
+        id: p.legacy_id ?? p.id,
+        name: p.name_ko || p.name_ja,
+        category: p.category_name_ko || p.category_name_ja,
+        price: p.sale_price ?? p.price ?? p.regular_price ?? 0,
+        image: buildImageUrl(p.image_url),
+        scenes: Array.isArray(p.scenes) ? p.scenes : [],
+        colors: Array.isArray(p.colors) ? p.colors : [],
+    };
+}
+
 const colors = [
     { id: "pure-white", name: "퓨어화이트", color: "#FFFFFF", border: true },
     { id: "light-gray", name: "라이트그레이", color: "#C0C0C0" },
@@ -33,7 +44,10 @@ const colors = [
 ];
 
 export default function ProductList() {
-    const [filteredProducts, setFilteredProducts] = useState(products);
+    const [products, setProducts] = useState([]);
+    const [filteredProducts, setFilteredProducts] = useState([]);
+    const [isProductLoading, setIsProductLoading] = useState(true);
+    const [productErrorMessage, setProductErrorMessage] = useState("");
     const [categories, setCategories] = useState([]);
     const [isCategoryLoading, setIsCategoryLoading] = useState(true);
     const [categoryErrorMessage, setCategoryErrorMessage] = useState("");
@@ -73,6 +87,44 @@ export default function ProductList() {
         };
     }, []);
 
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetchProducts = async () => {
+            try {
+                setIsProductLoading(true);
+                setProductErrorMessage("");
+
+                const response = await fetch(`${API_BASE_URL}/products`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch products: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const rawProducts = Array.isArray(data?.data) ? data.data : [];
+                const mappedProducts = rawProducts.map(mapApiProductToFront);
+
+                if (!isMounted) return;
+                setProducts(mappedProducts);
+                setFilteredProducts(mappedProducts);
+            } catch (error) {
+                if (!isMounted) return;
+                setProductErrorMessage("상품 정보를 불러오는 중 오류가 발생했습니다.");
+                setProducts([]);
+                setFilteredProducts([]);
+            } finally {
+                if (!isMounted) return;
+                setIsProductLoading(false);
+            }
+        };
+
+        fetchProducts();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
     return (
         <div className="pb-12">
             {/* Hero Section */}
@@ -106,7 +158,11 @@ export default function ProductList() {
                                 className="group relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800"
                             >
                                 <img
-                                    src={buildImageUrl(cat.image_url) || "https://images.unsplash.com/photo-1540574163026-643ea20ade25?q=80&w=400&auto=format&fit=crop"}
+                                    src={
+                                        buildImageUrl(cat.product_image_url)
+                                        || buildImageUrl(cat.image_url)
+                                        || ""
+                                    }
                                     alt={displayName}
                                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                                 />
@@ -164,12 +220,22 @@ export default function ProductList() {
                     <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 max-w-xl mx-auto mb-2">
                         USM 할러 모듈러 가구 컬렉션을 만나보세요.
                     </p>
-                    <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
-                        {filteredProducts.length}개의 제품이 있습니다
-                    </p>
+                    {!isProductLoading && !productErrorMessage && (
+                        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                            {filteredProducts.length}개의 제품이 있습니다
+                        </p>
+                    )}
                 </div>
 
-                {filteredProducts.length > 0 ? (
+                {isProductLoading ? (
+                    <div className="py-12 md:py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+                        상품 정보를 불러오는 중입니다...
+                    </div>
+                ) : productErrorMessage ? (
+                    <div className="py-12 md:py-16 text-center text-sm text-red-500">
+                        {productErrorMessage}
+                    </div>
+                ) : filteredProducts.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-x-8 md:gap-y-12">
                         {filteredProducts.map((product) => (
                             <ProductCard key={product.id} product={product} />

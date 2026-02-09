@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import sceneImages from "../data/sceneImages.json";
 
@@ -37,7 +37,9 @@ const scenes = [
 ];
 
 export default function ScenePage() {
-    const [selectedScene, setSelectedScene] = useState("living");
+    const location = useLocation();
+    const initialScene = location.state?.sceneId || "living";
+    const [selectedScene, setSelectedScene] = useState(initialScene);
     const navigate = useNavigate();
 
     const handleSceneClick = (sceneId) => {

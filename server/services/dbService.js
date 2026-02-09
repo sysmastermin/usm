@@ -29,7 +29,7 @@ export async function createCategoriesTable() {
  */
 export async function createProductsTable() {
   const pool = await getPool();
-  
+
   // 1. 테이블이 없으면 생성 (legacy_id 포함)
   const createTableQuery = `
     IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[products]') AND type in (N'U'))
@@ -80,12 +80,12 @@ export async function createProductsTable() {
       BEGIN
         CREATE INDEX IX_products_category_id ON [dbo].[products]([category_id]);
       END;
-      
+
       IF NOT EXISTS (SELECT name FROM sys.indexes WHERE name = 'IX_products_product_code' AND object_id = OBJECT_ID('dbo.products'))
       BEGIN
         CREATE INDEX IX_products_product_code ON [dbo].[products]([product_code]);
       END;
-      
+
       IF NOT EXISTS (SELECT name FROM sys.indexes WHERE name = 'IX_products_detail_url' AND object_id = OBJECT_ID('dbo.products'))
       BEGIN
         CREATE INDEX IX_products_detail_url ON [dbo].[products]([detail_url]);
@@ -143,57 +143,57 @@ export async function createProductsTable() {
       BEGIN
         ALTER TABLE [dbo].[products] ADD [model_number] NVARCHAR(50) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'regular_price') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [regular_price] DECIMAL(18,2) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'sale_price') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [sale_price] DECIMAL(18,2) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'image_gallery') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [image_gallery] NVARCHAR(MAX) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'specs') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [specs] NVARCHAR(MAX) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'color_options') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [color_options] NVARCHAR(MAX) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'scene_images') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [scene_images] NVARCHAR(MAX) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'special_notes') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [special_notes] NVARCHAR(MAX) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'material_ja') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [material_ja] NVARCHAR(255) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'material_ko') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [material_ko] NVARCHAR(255) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'specs_ja') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [specs_ja] NVARCHAR(MAX) NULL;
       END;
-      
+
       IF COL_LENGTH('dbo.products', 'specs_ko') IS NULL
       BEGIN
         ALTER TABLE [dbo].[products] ADD [specs_ko] NVARCHAR(MAX) NULL;
@@ -209,7 +209,7 @@ export async function createProductsTable() {
 export async function upsertCategory(category) {
   const pool = await getPool();
   const request = pool.request();
-  
+
   request.input('name_ja', sql.NVarChar, category.name_ja);
   request.input('name_ko', sql.NVarChar, category.name_ko);
   request.input('slug', sql.NVarChar, category.slug);
@@ -230,7 +230,7 @@ export async function upsertCategory(category) {
     WHEN NOT MATCHED THEN
       INSERT (name_ja, name_ko, slug, url, image_url)
       VALUES (@name_ja, @name_ko, @slug, @url, @image_url);
-    
+
     SELECT id FROM [dbo].[categories] WHERE slug = @slug;
   `;
 
@@ -244,7 +244,7 @@ export async function upsertCategory(category) {
 export async function upsertProduct(product, categoryId) {
   const pool = await getPool();
   const request = pool.request();
-  
+
   request.input('category_id', sql.Int, categoryId);
   request.input('name_ja', sql.NVarChar, product.name_ja);
   request.input('name_ko', sql.NVarChar, product.name_ko);
@@ -309,7 +309,7 @@ export async function upsertProduct(product, categoryId) {
     WHEN NOT MATCHED THEN
       INSERT (category_id, name_ja, name_ko, description_ja, description_ko, product_code, model_number, price, regular_price, sale_price, image_url, image_gallery, detail_url, dimensions, weight, material, material_ja, material_ko, specs, specs_ja, specs_ko, color_options, scene_images, special_notes, rank, badges, raw_data)
       VALUES (@category_id, @name_ja, @name_ko, @description_ja, @description_ko, @product_code, @model_number, @price, @regular_price, @sale_price, @image_url, @image_gallery, @detail_url, @dimensions, @weight, @material, @material_ja, @material_ko, @specs, @specs_ja, @specs_ko, @color_options, @scene_images, @special_notes, @rank, @badges, @raw_data);
-    
+
     SELECT id FROM [dbo].[products] WHERE detail_url = @detail_url;
   `;
 
@@ -322,7 +322,7 @@ export async function upsertProduct(product, categoryId) {
  */
 export async function saveCrawlResult(crawlResult) {
   const pool = await getPool();
-  
+
   try {
     // 테이블 생성
     await createCategoriesTable();
@@ -347,7 +347,7 @@ export async function saveCrawlResult(crawlResult) {
       }
 
       await transaction.commit();
-      
+
       return {
         categoriesSaved: crawlResult.categories.length,
         productsSaved: crawlResult.products.length,
@@ -368,9 +368,20 @@ export async function saveCrawlResult(crawlResult) {
 export async function getCategories() {
   const pool = await getPool();
   const query = `
-    SELECT id, name_ja, name_ko, slug, url, image_url, created_at, updated_at
-    FROM [dbo].[categories]
-    ORDER BY name_ja
+    SELECT
+      c.id, c.name_ja, c.name_ko, c.slug, c.url,
+      COALESCE(c.image_url, p_first.image_url) AS image_url,
+      p_first.image_url AS product_image_url,
+      c.created_at, c.updated_at
+    FROM [dbo].[categories] c
+    OUTER APPLY (
+      SELECT TOP 1 p.image_url
+      FROM [dbo].[products] p
+      WHERE p.category_id = c.id
+        AND p.image_url IS NOT NULL
+      ORDER BY p.rank DESC, p.id
+    ) p_first
+    ORDER BY c.name_ja
   `;
   const result = await pool.request().query(query);
   return result.recordset;
@@ -383,13 +394,13 @@ export async function getCategoryBySlug(slug) {
   const pool = await getPool();
   const request = pool.request();
   request.input('slug', sql.NVarChar, slug);
-  
+
   const query = `
     SELECT name_ja, name_ko, slug
     FROM [dbo].[categories]
     WHERE slug = @slug
   `;
-  
+
   const result = await request.query(query);
   return result.recordset[0] || null;
 }
@@ -401,10 +412,10 @@ export async function getProductByDetailUrl(detailUrl) {
   const pool = await getPool();
   const request = pool.request();
   request.input('detailUrl', sql.NVarChar, detailUrl);
-  
+
   const query = `
-    SELECT 
-      name_ja, name_ko, 
+    SELECT
+      name_ja, name_ko,
       description_ja, description_ko,
       material, material_ja, material_ko,
       specs, specs_ja, specs_ko,
@@ -413,7 +424,7 @@ export async function getProductByDetailUrl(detailUrl) {
     FROM [dbo].[products]
     WHERE detail_url = @detailUrl
   `;
-  
+
   const result = await request.query(query);
   return result.recordset[0] || null;
 }
@@ -424,9 +435,9 @@ export async function getProductByDetailUrl(detailUrl) {
 export async function getProducts(filters = {}) {
   const pool = await getPool();
   const request = pool.request();
-  
+
   let query = `
-    SELECT 
+    SELECT
       p.id, p.category_id, p.legacy_id, p.name_ja, p.name_ko, p.description_ja, p.description_ko,
       p.product_code, p.price, p.image_url, p.detail_url, p.dimensions, p.weight, p.material,
       p.rank, p.badges, p.created_at, p.updated_at,
@@ -469,16 +480,16 @@ export async function getProductById(id) {
   const pool = await getPool();
   const request = pool.request();
   request.input('id', sql.Int, id);
-  
+
   const query = `
-    SELECT 
+    SELECT
       p.*,
       c.name_ja AS category_name_ja, c.name_ko AS category_name_ko, c.slug AS category_slug
     FROM [dbo].[products] p
     LEFT JOIN [dbo].[categories] c ON p.category_id = c.id
     WHERE p.id = @id
   `;
-  
+
   const result = await request.query(query);
   return result.recordset[0] || null;
 }
@@ -492,7 +503,7 @@ export async function getProductByLegacyId(legacyId) {
   request.input('legacyId', sql.Int, legacyId);
 
   const query = `
-    SELECT 
+    SELECT
       p.*,
       c.name_ja AS category_name_ja, c.name_ko AS category_name_ko, c.slug AS category_slug
     FROM [dbo].[products] p
@@ -502,4 +513,577 @@ export async function getProductByLegacyId(legacyId) {
 
   const result = await request.query(query);
   return result.recordset[0] || null;
+}
+
+/* ============================================================
+ * 관리자 전용 DB 서비스 함수
+ * ============================================================ */
+
+/**
+ * 대시보드 통계 조회
+ * - 전체 상품 수, 카테고리 수, 번역 완료율, 이미지 보유율
+ * - 최근 추가된 상품 5개
+ */
+export async function getDashboardStats() {
+  const pool = await getPool();
+
+  const statsQuery = `
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[products])
+        AS totalProducts,
+      (SELECT COUNT(*) FROM [dbo].[categories])
+        AS totalCategories,
+      (SELECT COUNT(*) FROM [dbo].[products]
+        WHERE name_ko IS NOT NULL
+          AND LEN(name_ko) > 0)
+        AS translatedProducts,
+      (SELECT COUNT(*) FROM [dbo].[products]
+        WHERE image_url IS NOT NULL
+          AND LEN(image_url) > 0)
+        AS productsWithImage
+  `;
+
+  const recentQuery = `
+    SELECT TOP 5
+      p.id, p.name_ja, p.name_ko, p.image_url,
+      p.price, p.created_at, p.updated_at,
+      c.name_ko AS category_name_ko,
+      c.name_ja AS category_name_ja
+    FROM [dbo].[products] p
+    LEFT JOIN [dbo].[categories] c
+      ON p.category_id = c.id
+    ORDER BY p.updated_at DESC
+  `;
+
+  const [statsResult, recentResult] = await Promise.all([
+    pool.request().query(statsQuery),
+    pool.request().query(recentQuery),
+  ]);
+
+  const stats = statsResult.recordset[0];
+  const total = stats.totalProducts || 1;
+
+  return {
+    totalProducts: stats.totalProducts,
+    totalCategories: stats.totalCategories,
+    translationRate: Math.round(
+      (stats.translatedProducts / total) * 100
+    ),
+    imageRate: Math.round(
+      (stats.productsWithImage / total) * 100
+    ),
+    recentProducts: recentResult.recordset,
+  };
+}
+
+/**
+ * 관리자 상품 목록 조회 (서버사이드 페이지네이션)
+ * COUNT(*) OVER() 윈도우 함수로 1회 쿼리에 데이터+총수 반환
+ */
+export async function getAdminProducts(options = {}) {
+  const pool = await getPool();
+  const request = pool.request();
+
+  const page = Math.max(1, parseInt(options.page) || 1);
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(options.limit) || 20)
+  );
+  const offset = (page - 1) * limit;
+
+  let where = 'WHERE 1=1';
+
+  if (options.search) {
+    request.input(
+      'search',
+      sql.NVarChar,
+      `%${options.search}%`
+    );
+    where +=
+      ' AND (p.name_ja LIKE @search'
+      + ' OR p.name_ko LIKE @search'
+      + ' OR p.product_code LIKE @search)';
+  }
+
+  if (options.categoryId) {
+    request.input(
+      'categoryId',
+      sql.Int,
+      parseInt(options.categoryId)
+    );
+    where += ' AND p.category_id = @categoryId';
+  }
+
+  if (options.untranslated === 'true') {
+    where +=
+      ' AND (p.name_ko IS NULL OR LEN(p.name_ko) = 0)';
+  }
+
+  request.input('limit', sql.Int, limit);
+  request.input('offset', sql.Int, offset);
+
+  const query = `
+    SELECT
+      p.id, p.category_id, p.legacy_id,
+      p.name_ja, p.name_ko,
+      p.product_code, p.price, p.image_url,
+      p.created_at, p.updated_at,
+      c.name_ko AS category_name_ko,
+      c.name_ja AS category_name_ja,
+      c.slug AS category_slug,
+      CASE
+        WHEN p.name_ko IS NOT NULL
+          AND LEN(p.name_ko) > 0
+        THEN 1 ELSE 0
+      END AS is_translated,
+      COUNT(*) OVER() AS total_count
+    FROM [dbo].[products] p
+    LEFT JOIN [dbo].[categories] c
+      ON p.category_id = c.id
+    ${where}
+    ORDER BY p.updated_at DESC
+    OFFSET @offset ROWS
+    FETCH NEXT @limit ROWS ONLY
+  `;
+
+  const result = await request.query(query);
+  const total =
+    result.recordset[0]?.total_count || 0;
+
+  return {
+    items: result.recordset.map(
+      ({ total_count, ...rest }) => rest
+    ),
+    meta: { page, limit, total },
+  };
+}
+
+/**
+ * 관리자 상품 수정
+ * - 화이트리스트 방식으로 허용된 필드만 업데이트
+ */
+const PRODUCT_UPDATABLE_FIELDS = [
+  'name_ja', 'name_ko',
+  'description_ja', 'description_ko',
+  'product_code', 'model_number',
+  'price', 'regular_price', 'sale_price',
+  'image_url', 'image_gallery',
+  'dimensions', 'weight',
+  'material', 'material_ja', 'material_ko',
+  'specs', 'specs_ja', 'specs_ko',
+  'color_options', 'scene_images',
+  'special_notes', 'rank', 'badges',
+  'category_id',
+];
+
+/** 필드 타입 매핑 */
+const PRODUCT_FIELD_TYPES = {
+  name_ja: sql.NVarChar(500),
+  name_ko: sql.NVarChar(500),
+  description_ja: sql.NVarChar(sql.MAX),
+  description_ko: sql.NVarChar(sql.MAX),
+  product_code: sql.NVarChar(50),
+  model_number: sql.NVarChar(50),
+  price: sql.Decimal(18, 2),
+  regular_price: sql.Decimal(18, 2),
+  sale_price: sql.Decimal(18, 2),
+  image_url: sql.NVarChar(500),
+  image_gallery: sql.NVarChar(sql.MAX),
+  dimensions: sql.NVarChar(100),
+  weight: sql.NVarChar(50),
+  material: sql.NVarChar(255),
+  material_ja: sql.NVarChar(255),
+  material_ko: sql.NVarChar(255),
+  specs: sql.NVarChar(sql.MAX),
+  specs_ja: sql.NVarChar(sql.MAX),
+  specs_ko: sql.NVarChar(sql.MAX),
+  color_options: sql.NVarChar(sql.MAX),
+  scene_images: sql.NVarChar(sql.MAX),
+  special_notes: sql.NVarChar(sql.MAX),
+  rank: sql.Int,
+  badges: sql.NVarChar(sql.MAX),
+  category_id: sql.Int,
+};
+
+export async function updateProduct(id, fields) {
+  const pool = await getPool();
+  const request = pool.request();
+  request.input('id', sql.Int, id);
+
+  const setClauses = [];
+
+  for (const key of PRODUCT_UPDATABLE_FIELDS) {
+    if (fields[key] !== undefined) {
+      let value = fields[key];
+
+      // JSON 필드는 stringify
+      if (
+        typeof value === 'object'
+        && value !== null
+        && !Array.isArray(value)
+      ) {
+        value = JSON.stringify(value);
+      }
+      if (Array.isArray(value)) {
+        value = JSON.stringify(value);
+      }
+
+      // 숫자 타입 변환
+      if (
+        ['price', 'regular_price', 'sale_price'].includes(
+          key
+        )
+      ) {
+        value =
+          value !== null && value !== ''
+            ? parseFloat(value)
+            : null;
+      }
+      if (['rank', 'category_id'].includes(key)) {
+        value =
+          value !== null && value !== ''
+            ? parseInt(value)
+            : null;
+      }
+
+      request.input(
+        key,
+        PRODUCT_FIELD_TYPES[key] || sql.NVarChar(500),
+        value
+      );
+      setClauses.push(`[${key}] = @${key}`);
+    }
+  }
+
+  if (setClauses.length === 0) {
+    throw new Error('수정할 필드가 없습니다');
+  }
+
+  setClauses.push('[updated_at] = GETDATE()');
+
+  const query = `
+    UPDATE [dbo].[products]
+    SET ${setClauses.join(', ')}
+    WHERE id = @id;
+
+    SELECT p.*, c.name_ko AS category_name_ko,
+      c.name_ja AS category_name_ja,
+      c.slug AS category_slug
+    FROM [dbo].[products] p
+    LEFT JOIN [dbo].[categories] c
+      ON p.category_id = c.id
+    WHERE p.id = @id;
+  `;
+
+  const result = await request.query(query);
+  return result.recordset[0] || null;
+}
+
+/**
+ * 관리자 상품 삭제
+ */
+export async function deleteProduct(id) {
+  const pool = await getPool();
+  const request = pool.request();
+  request.input('id', sql.Int, id);
+
+  // 존재 확인
+  const check = await request.query(
+    'SELECT id FROM [dbo].[products] WHERE id = @id'
+  );
+  if (check.recordset.length === 0) {
+    throw new Error('상품을 찾을 수 없습니다');
+  }
+
+  await pool.request()
+    .input('id', sql.Int, id)
+    .query('DELETE FROM [dbo].[products] WHERE id = @id');
+
+  return true;
+}
+
+/**
+ * 관리자 카테고리 목록 (소속 상품 수 포함)
+ */
+export async function getAdminCategories() {
+  const pool = await getPool();
+
+  const query = `
+    SELECT
+      c.id, c.name_ja, c.name_ko, c.slug,
+      c.url, c.image_url,
+      c.created_at, c.updated_at,
+      (SELECT COUNT(*) FROM [dbo].[products]
+        WHERE category_id = c.id) AS product_count
+    FROM [dbo].[categories] c
+    ORDER BY c.name_ja
+  `;
+
+  const result = await pool.request().query(query);
+  return result.recordset;
+}
+
+/**
+ * 관리자 카테고리 수정
+ */
+export async function updateCategory(id, fields) {
+  const pool = await getPool();
+  const request = pool.request();
+  request.input('id', sql.Int, id);
+
+  const setClauses = [];
+  const allowed = [
+    'name_ja', 'name_ko', 'slug', 'image_url',
+  ];
+
+  for (const key of allowed) {
+    if (fields[key] !== undefined) {
+      request.input(key, sql.NVarChar(500), fields[key]);
+      setClauses.push(`[${key}] = @${key}`);
+    }
+  }
+
+  if (setClauses.length === 0) {
+    throw new Error('수정할 필드가 없습니다');
+  }
+
+  setClauses.push('[updated_at] = GETDATE()');
+
+  const query = `
+    UPDATE [dbo].[categories]
+    SET ${setClauses.join(', ')}
+    WHERE id = @id;
+
+    SELECT c.*,
+      (SELECT COUNT(*) FROM [dbo].[products]
+        WHERE category_id = c.id) AS product_count
+    FROM [dbo].[categories] c
+    WHERE c.id = @id;
+  `;
+
+  const result = await request.query(query);
+  return result.recordset[0] || null;
+}
+
+/**
+ * 관리자 카테고리 삭제
+ * - 소속 상품이 있으면 삭제 불가
+ */
+export async function deleteCategory(id) {
+  const pool = await getPool();
+  const request = pool.request();
+  request.input('id', sql.Int, id);
+
+  // 소속 상품 수 확인
+  const countResult = await request.query(
+    `SELECT COUNT(*) AS cnt
+     FROM [dbo].[products]
+     WHERE category_id = @id`
+  );
+
+  if (countResult.recordset[0].cnt > 0) {
+    throw new Error(
+      `이 카테고리에 ${countResult.recordset[0].cnt}개의 상품이 있습니다. 먼저 상품을 삭제하거나 이동해주세요.`
+    );
+  }
+
+  await pool.request()
+    .input('id', sql.Int, id)
+    .query(
+      'DELETE FROM [dbo].[categories] WHERE id = @id'
+    );
+
+  return true;
+}
+
+/**
+ * 미번역 항목 조회 (서버사이드 페이지네이션)
+ * @param {'product'|'category'} type
+ */
+export async function getUntranslated(options = {}) {
+  const pool = await getPool();
+  const request = pool.request();
+
+  const type = options.type || 'product';
+  const page = Math.max(1, parseInt(options.page) || 1);
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(options.limit) || 20)
+  );
+  const offset = (page - 1) * limit;
+
+  request.input('limit', sql.Int, limit);
+  request.input('offset', sql.Int, offset);
+
+  let query;
+
+  if (type === 'category') {
+    query = `
+      SELECT
+        id, name_ja, name_ko, slug,
+        COUNT(*) OVER() AS total_count
+      FROM [dbo].[categories]
+      WHERE name_ko IS NULL OR LEN(name_ko) = 0
+      ORDER BY name_ja
+      OFFSET @offset ROWS
+      FETCH NEXT @limit ROWS ONLY
+    `;
+  } else {
+    query = `
+      SELECT
+        p.id, p.name_ja, p.name_ko,
+        p.description_ja, p.description_ko,
+        p.material_ja, p.material_ko,
+        p.image_url,
+        c.name_ko AS category_name_ko,
+        c.name_ja AS category_name_ja,
+        COUNT(*) OVER() AS total_count
+      FROM [dbo].[products] p
+      LEFT JOIN [dbo].[categories] c
+        ON p.category_id = c.id
+      WHERE p.name_ko IS NULL
+        OR LEN(p.name_ko) = 0
+        OR p.description_ko IS NULL
+        OR LEN(p.description_ko) = 0
+      ORDER BY p.name_ja
+      OFFSET @offset ROWS
+      FETCH NEXT @limit ROWS ONLY
+    `;
+  }
+
+  const result = await request.query(query);
+  const total =
+    result.recordset[0]?.total_count || 0;
+
+  return {
+    items: result.recordset.map(
+      ({ total_count, ...rest }) => rest
+    ),
+    meta: { page, limit, total, type },
+  };
+}
+
+/**
+ * 번역 대상 상품/카테고리 원문 조회
+ * (일괄 번역 시 사용)
+ */
+export async function getItemsForTranslation(
+  ids,
+  type = 'product'
+) {
+  const pool = await getPool();
+
+  if (!ids || ids.length === 0) return [];
+
+  // IN 절에 직접 ID 바인딩 (parameterized)
+  const idList = ids
+    .map((id) => parseInt(id))
+    .filter((id) => !isNaN(id));
+
+  if (idList.length === 0) return [];
+
+  // mssql에서 IN절 파라미터 바인딩
+  const placeholders = idList
+    .map((_, i) => `@id${i}`)
+    .join(',');
+
+  const request = pool.request();
+  idList.forEach((id, i) => {
+    request.input(`id${i}`, sql.Int, id);
+  });
+
+  let query;
+  if (type === 'category') {
+    query = `
+      SELECT id, name_ja, name_ko
+      FROM [dbo].[categories]
+      WHERE id IN (${placeholders})
+    `;
+  } else {
+    query = `
+      SELECT id, name_ja, name_ko,
+        description_ja, description_ko,
+        material_ja, material_ko
+      FROM [dbo].[products]
+      WHERE id IN (${placeholders})
+    `;
+  }
+
+  const result = await request.query(query);
+  return result.recordset;
+}
+
+/**
+ * 번역 결과 저장 (상품)
+ */
+export async function saveProductTranslation(
+  id,
+  translations
+) {
+  const pool = await getPool();
+  const request = pool.request();
+  request.input('id', sql.Int, id);
+
+  const setClauses = [];
+
+  if (translations.name_ko !== undefined) {
+    request.input(
+      'name_ko',
+      sql.NVarChar(500),
+      translations.name_ko
+    );
+    setClauses.push('[name_ko] = @name_ko');
+  }
+  if (translations.description_ko !== undefined) {
+    request.input(
+      'description_ko',
+      sql.NVarChar(sql.MAX),
+      translations.description_ko
+    );
+    setClauses.push(
+      '[description_ko] = @description_ko'
+    );
+  }
+  if (translations.material_ko !== undefined) {
+    request.input(
+      'material_ko',
+      sql.NVarChar(255),
+      translations.material_ko
+    );
+    setClauses.push('[material_ko] = @material_ko');
+  }
+
+  if (setClauses.length === 0) return null;
+
+  setClauses.push('[updated_at] = GETDATE()');
+
+  await request.query(`
+    UPDATE [dbo].[products]
+    SET ${setClauses.join(', ')}
+    WHERE id = @id
+  `);
+
+  return true;
+}
+
+/**
+ * 번역 결과 저장 (카테고리)
+ */
+export async function saveCategoryTranslation(
+  id,
+  nameKo
+) {
+  const pool = await getPool();
+  const request = pool.request();
+  request.input('id', sql.Int, id);
+  request.input('name_ko', sql.NVarChar(255), nameKo);
+
+  await request.query(`
+    UPDATE [dbo].[categories]
+    SET [name_ko] = @name_ko,
+        [updated_at] = GETDATE()
+    WHERE id = @id
+  `);
+
+  return true;
 }

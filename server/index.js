@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import apiRoutes from './routes/api.js';
+import adminRoutes from './routes/admin.js';
 import { getPool, closePool } from './config/db.js';
 import { createCategoriesTable, createProductsTable } from './services/dbService.js';
 
@@ -32,6 +33,9 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api', apiRoutes);
 
+// Admin API Routes
+app.use('/api/admin', adminRoutes);
+
 // Error handling
 app.use((err, req, res, next) => {
   console.error('에러 발생:', err);
@@ -55,13 +59,13 @@ async function startServer() {
   try {
     // DB 연결 테스트
     await getPool();
-    
+
     // 테이블 마이그레이션 실행
     console.log('📋 테이블 마이그레이션 실행 중...');
     await createCategoriesTable();
     await createProductsTable();
     console.log('✅ 테이블 마이그레이션 완료');
-    
+
     app.listen(PORT, () => {
       console.log(`🚀 서버가 포트 ${PORT}에서 실행 중입니다`);
       console.log(`📍 Health check: http://localhost:${PORT}/health`);
