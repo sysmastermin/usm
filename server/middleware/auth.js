@@ -3,11 +3,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const JWT_SECRET =
+const JWT_SECRET = (
   process.env.JWT_SECRET ||
-  'usm-admin-jwt-secret-key-fallback';
-const ADMIN_PASSWORD =
-  process.env.ADMIN_PASSWORD || 'usm@admin2026!';
+  'usm-admin-jwt-secret-key-fallback'
+).trim();
+const ADMIN_PASSWORD = (
+  process.env.ADMIN_PASSWORD || 'usm@admin2026!'
+).trim();
 const TOKEN_EXPIRY = '24h';
 
 // --- Rate Limiting (IP별 5회/분) ---

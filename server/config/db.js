@@ -3,19 +3,20 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 비밀번호에서 따옴표 제거 (dotenv가 따옴표를 포함해서 읽을 수 있음)
+// 환경변수에서 따옴표/공백 제거
 const cleanPassword = (
   process.env.DB_PASS || '@allin#am1071'
-).replace(/^["']|["']$/g, '');
+).replace(/^["']|["']$/g, '').trim();
+
+const dbHost = (
+  process.env.DB_HOST || '59.23.231.197,14103'
+).trim();
 
 const config = {
-  server:
-    process.env.DB_HOST?.split(',')[0] || '59.23.231.197',
-  port: parseInt(
-    process.env.DB_HOST?.split(',')[1] || '14103'
-  ),
-  database: process.env.DB_NAME || 'usm',
-  user: process.env.DB_USER || '1stplatfor_sql',
+  server: dbHost.split(',')[0] || '59.23.231.197',
+  port: parseInt(dbHost.split(',')[1] || '14103'),
+  database: (process.env.DB_NAME || 'usm').trim(),
+  user: (process.env.DB_USER || '1stplatfor_sql').trim(),
   password: cleanPassword,
   options: {
     encrypt: true,
