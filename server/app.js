@@ -5,6 +5,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import apiRoutes from './routes/api.js';
 import adminRoutes from './routes/admin.js';
+import authRoutes from './routes/auth.js';
+import cartRoutes from './routes/cart.js';
+import orderRoutes from './routes/orders.js';
+import wishlistRoutes from './routes/wishlist.js';
+import {
+  userAuthMiddleware,
+} from './middleware/userAuth.js';
 
 dotenv.config();
 
@@ -38,6 +45,18 @@ app.use('/api', apiRoutes);
 
 // Admin API Routes
 app.use('/api/admin', adminRoutes);
+
+// 사용자 인증 API (공개 + 인증)
+app.use('/api/auth', authRoutes);
+
+// 쇼핑몰 API (인증 필요)
+app.use('/api/cart', userAuthMiddleware, cartRoutes);
+app.use('/api/orders', userAuthMiddleware, orderRoutes);
+app.use(
+  '/api/wishlist',
+  userAuthMiddleware,
+  wishlistRoutes
+);
 
 // Error handling
 app.use((err, req, res, next) => {

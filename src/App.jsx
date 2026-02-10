@@ -10,6 +10,35 @@ import CategoryPage from "./pages/CategoryPage";
 import ColorPage from "./pages/ColorPage";
 import ConfiguratorPage from "./pages/ConfiguratorPage";
 
+// 사용자 페이지 (React.lazy - 코드 분할)
+const LoginPage = lazy(
+  () => import("./pages/auth/LoginPage")
+);
+const RegisterPage = lazy(
+  () => import("./pages/auth/RegisterPage")
+);
+const UserRoute = lazy(
+  () => import("./components/user/UserRoute")
+);
+const MyPage = lazy(
+  () => import("./pages/user/MyPage")
+);
+const CartPage = lazy(
+  () => import("./pages/user/CartPage")
+);
+const CheckoutPage = lazy(
+  () => import("./pages/user/CheckoutPage")
+);
+const OrdersPage = lazy(
+  () => import("./pages/user/OrdersPage")
+);
+const OrderDetailPage = lazy(
+  () => import("./pages/user/OrderDetailPage")
+);
+const WishlistPage = lazy(
+  () => import("./pages/user/WishlistPage")
+);
+
 // 관리자 페이지 (React.lazy - 코드 분할)
 const AdminLoginPage = lazy(
   () => import("./pages/admin/AdminLoginPage")
@@ -38,6 +67,17 @@ const AdminCrawler = lazy(
 const AdminTranslations = lazy(
   () => import("./pages/admin/AdminTranslations")
 );
+
+/**
+ * 페이지 로딩 UI
+ */
+function PageFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+    </div>
+  );
+}
 
 /**
  * 관리자 페이지 로딩 UI
@@ -69,6 +109,40 @@ function App() {
         <Route path="category/:categoryName" element={<CategoryPage />} />
         <Route path="color/:colorName" element={<ColorPage />} />
         <Route path="configurator" element={<ConfiguratorPage />} />
+
+        {/* 인증 페이지 (공개, Layout 내부) */}
+        <Route
+          path="login"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <LoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="register"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <RegisterPage />
+            </Suspense>
+          }
+        />
+
+        {/* 사용자 전용 (인증 필요) */}
+        <Route
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <UserRoute />
+            </Suspense>
+          }
+        >
+          <Route path="mypage" element={<MyPage />} />
+          <Route path="cart" element={<CartPage />} />
+          <Route path="checkout" element={<CheckoutPage />} />
+          <Route path="orders" element={<OrdersPage />} />
+          <Route path="orders/:id" element={<OrderDetailPage />} />
+          <Route path="wishlist" element={<WishlistPage />} />
+        </Route>
       </Route>
 
       {/* 관리자 로그인 (인증 불필요) */}

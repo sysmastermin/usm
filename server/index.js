@@ -5,6 +5,9 @@ import {
   createCategoriesTable,
   createProductsTable,
 } from './services/dbService.js';
+import {
+  createShopTables,
+} from './services/shopService.js';
 
 dotenv.config();
 
@@ -20,6 +23,7 @@ async function startServer() {
     console.log('📋 테이블 마이그레이션 실행 중...');
     await createCategoriesTable();
     await createProductsTable();
+    await createShopTables();
     console.log('✅ 테이블 마이그레이션 완료');
 
     app.listen(PORT, () => {
