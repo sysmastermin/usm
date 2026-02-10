@@ -11,9 +11,7 @@ import {
 import { useUserAuth } from "../context/UserAuthContext";
 import userApi from "../lib/userApi";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "/api";
+const API_BASE_URL = "/api";
 
 export default function ProductDetail() {
   const { id } = useParams();

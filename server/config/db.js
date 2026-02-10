@@ -24,18 +24,23 @@ const config = {
     enableArithAbort: true,
   },
   pool: {
-    max: 20,
+    max: 10,
     min: 0,
     idleTimeoutMillis: 30000,
   },
-  connectionTimeout: 15000,
-  requestTimeout: 30000,
+  // 서버리스 환경(Vercel 30s 제한) 대응:
+  // 연결 8s + 재시도 1회(2s 대기 + 8s) = 최대 18s
+  connectionTimeout: 8000,
+  requestTimeout: 15000,
 };
 
 let pool = null;
 
-/** 최대 재시도 횟수 */
-const MAX_RETRIES = 3;
+/**
+ * 최대 재시도 횟수
+ * 서버리스 환경에서는 2회로 제한 (8s × 2 + 2s 대기 = 18s)
+ */
+const MAX_RETRIES = 2;
 
 /**
  * DB 커넥션 풀 획득 (재시도 로직 포함)

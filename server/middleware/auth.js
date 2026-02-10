@@ -18,16 +18,23 @@ const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 60 * 1000;
 
 // 오래된 기록 자동 정리 (5분마다)
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, times] of loginAttempts) {
-    const recent = times.filter(
-      (t) => now - t < WINDOW_MS
-    );
-    if (recent.length === 0) loginAttempts.delete(ip);
-    else loginAttempts.set(ip, recent);
+// 서버리스 환경에서는 setInterval이 불필요하므로 가드 추가
+if (typeof globalThis.__rateLimitCleaner === 'undefined') {
+  globalThis.__rateLimitCleaner = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, times] of loginAttempts) {
+      const recent = times.filter(
+        (t) => now - t < WINDOW_MS
+      );
+      if (recent.length === 0) loginAttempts.delete(ip);
+      else loginAttempts.set(ip, recent);
+    }
+  }, 5 * 60 * 1000);
+  // 서버리스 환경에서 함수 종료를 차단하지 않도록 unref 처리
+  if (globalThis.__rateLimitCleaner?.unref) {
+    globalThis.__rateLimitCleaner.unref();
   }
-}, 5 * 60 * 1000);
+}
 
 /**
  * 로그인 Rate Limiting 미들웨어

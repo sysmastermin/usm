@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import HeroCarousel from "./HeroCarousel";
 import ProductFilter from "./ProductFilter";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const API_BASE_URL = "/api";
 
 function buildImageUrl(imagePath) {
     if (!imagePath) return "";
