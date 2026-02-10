@@ -3,6 +3,7 @@ import ProductCard from "./ProductCard";
 import { Link } from "react-router-dom";
 import HeroCarousel from "./HeroCarousel";
 import ProductFilter from "./ProductFilter";
+import { useCategoriesContext } from "../context/CategoriesContext";
 
 const API_BASE_URL = "/api";
 
@@ -48,44 +49,13 @@ export default function ProductList() {
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [isProductLoading, setIsProductLoading] = useState(true);
     const [productErrorMessage, setProductErrorMessage] = useState("");
-    const [categories, setCategories] = useState([]);
-    const [isCategoryLoading, setIsCategoryLoading] = useState(true);
-    const [categoryErrorMessage, setCategoryErrorMessage] = useState("");
 
-    useEffect(() => {
-        let isMounted = true;
-
-        const fetchCategories = async () => {
-            try {
-                setIsCategoryLoading(true);
-                setCategoryErrorMessage("");
-
-                const response = await fetch(`${API_BASE_URL}/categories`);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch categories: ${response.status}`);
-                }
-
-                const data = await response.json();
-                const categoriesFromApi = Array.isArray(data?.data) ? data.data : [];
-
-                if (!isMounted) return;
-                setCategories(categoriesFromApi);
-            } catch (error) {
-                if (!isMounted) return;
-                setCategoryErrorMessage("카테고리 목록을 불러오는 중 오류가 발생했습니다.");
-                setCategories([]);
-            } finally {
-                if (!isMounted) return;
-                setIsCategoryLoading(false);
-            }
-        };
-
-        fetchCategories();
-
-        return () => {
-            isMounted = false;
-        };
-    }, []);
+    // Context에서 카테고리 데이터를 공유받음 (Header와 중복 fetch 제거)
+    const {
+        categories,
+        isLoading: isCategoryLoading,
+        error: categoryErrorMessage,
+    } = useCategoriesContext();
 
     useEffect(() => {
         let isMounted = true;
@@ -158,6 +128,7 @@ export default function ProductList() {
                                 className="group relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800"
                             >
                                 <img
+                                    loading="lazy"
                                     src={
                                         buildImageUrl(cat.product_image_url)
                                         || buildImageUrl(cat.image_url)

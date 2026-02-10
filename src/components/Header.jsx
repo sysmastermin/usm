@@ -15,9 +15,8 @@ import {
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { useUserAuth } from "../context/UserAuthContext";
+import { useCategoriesContext } from "../context/CategoriesContext";
 import SearchModal from "./SearchModal";
-
-const API_BASE_URL = "/api";
 
 export default function Header() {
   const navigate = useNavigate();
@@ -31,38 +30,12 @@ export default function Header() {
     cartCount,
     logout,
   } = useUserAuth();
-  const [navCategories, setNavCategories] = useState([]);
-  const [isNavLoading, setIsNavLoading] = useState(true);
+  const {
+    categories: navCategories,
+    isLoading: isNavLoading,
+  } = useCategoriesContext();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const fetchCategoriesForNav = async () => {
-      try {
-        setIsNavLoading(true);
-        const response = await fetch(
-          `${API_BASE_URL}/categories`
-        );
-        if (!response.ok) {
-          throw new Error(
-            `Failed to fetch categories: ${response.status}`
-          );
-        }
-        const data = await response.json();
-        const categoriesFromApi = Array.isArray(
-          data?.data
-        )
-          ? data.data
-          : [];
-        setNavCategories(categoriesFromApi);
-      } catch {
-        setNavCategories([]);
-      } finally {
-        setIsNavLoading(false);
-      }
-    };
-    fetchCategoriesForNav();
-  }, []);
 
   // 드롭다운 외부 클릭 닫기
   useEffect(() => {

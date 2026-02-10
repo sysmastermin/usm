@@ -436,12 +436,16 @@ export async function getProducts(filters = {}) {
   const pool = await getPool();
   const request = pool.request();
 
+  // 목록 조회 시 불필요한 대용량 컬럼(description) 제외하여 응답 크기 축소
   let query = `
     SELECT
-      p.id, p.category_id, p.legacy_id, p.name_ja, p.name_ko, p.description_ja, p.description_ko,
-      p.product_code, p.price, p.image_url, p.detail_url, p.dimensions, p.weight, p.material,
-      p.rank, p.badges, p.created_at, p.updated_at,
-      c.name_ja AS category_name_ja, c.name_ko AS category_name_ko, c.slug AS category_slug
+      p.id, p.category_id, p.legacy_id,
+      p.name_ja, p.name_ko,
+      p.product_code, p.price, p.image_url,
+      p.rank, p.badges,
+      c.name_ja AS category_name_ja,
+      c.name_ko AS category_name_ko,
+      c.slug AS category_slug
     FROM [dbo].[products] p
     LEFT JOIN [dbo].[categories] c ON p.category_id = c.id
     WHERE 1=1
@@ -464,10 +468,10 @@ export async function getProducts(filters = {}) {
 
   query += ' ORDER BY p.rank DESC, p.name_ja';
 
-  if (filters.limit) {
-    request.input('limit', sql.Int, filters.limit);
-    query += ' OFFSET 0 ROWS FETCH NEXT @limit ROWS ONLY';
-  }
+  // 기본 limit 100 적용 (전체 목록 무제한 조회 방지)
+  const limit = filters.limit || 100;
+  request.input('limit', sql.Int, limit);
+  query += ' OFFSET 0 ROWS FETCH NEXT @limit ROWS ONLY';
 
   const result = await request.query(query);
   return result.recordset;

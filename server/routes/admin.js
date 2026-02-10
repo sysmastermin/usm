@@ -21,6 +21,7 @@ import {
 import {
   translateJaToKo,
 } from '../utils/translator.js';
+import { clearCache } from '../utils/cache.js';
 
 const router = express.Router();
 
@@ -151,6 +152,9 @@ router.put('/products/:id', async (req, res) => {
       });
     }
 
+    // 상품 캐시 무효화
+    clearCache('products:*');
+
     res.json({
       success: true,
       data: updated,
@@ -180,6 +184,10 @@ router.delete('/products/:id', async (req, res) => {
     }
 
     await deleteProduct(id);
+
+    // 상품 캐시 무효화
+    clearCache('products:*');
+
     res.json({
       success: true,
       message: '상품이 삭제되었습니다',
@@ -243,6 +251,9 @@ router.put('/categories/:id', async (req, res) => {
       });
     }
 
+    // 카테고리 캐시 무효화
+    clearCache('categories');
+
     res.json({
       success: true,
       data: updated,
@@ -273,6 +284,10 @@ router.delete('/categories/:id', async (req, res) => {
     }
 
     await deleteCategory(id);
+
+    // 카테고리 캐시 무효화
+    clearCache('categories');
+
     res.json({
       success: true,
       message: '카테고리가 삭제되었습니다',
@@ -412,6 +427,15 @@ router.post('/translate', async (req, res) => {
           err.message
         );
         failed++;
+      }
+    }
+
+    // 번역 후 캐시 무효화
+    if (translated > 0) {
+      if (type === 'category') {
+        clearCache('categories');
+      } else {
+        clearCache('products:*');
       }
     }
 

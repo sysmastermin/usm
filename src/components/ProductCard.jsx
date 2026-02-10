@@ -6,6 +6,7 @@ export default function ProductCard({ product }) {
         <Link to={`/product/${product.id}`} className="group block">
             <div className="relative overflow-hidden bg-gray-100 rounded-sm aspect-square mb-4">
                 <motion.img
+                    loading="lazy"
                     whileHover={{ scale: 1.05 }}
                     transition={{ duration: 0.4, ease: "easeOut" }}
                     src={product.image}

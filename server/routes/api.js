@@ -1,8 +1,13 @@
 import express from 'express';
 import { crawlAll } from '../services/crawler.js';
 import { saveCrawlResult, getCategories, getProducts, getProductById, getProductByLegacyId } from '../services/dbService.js';
+import { getCached, setCache, clearCache } from '../utils/cache.js';
 
 const router = express.Router();
+
+/** 캐시 TTL 상수 */
+const CACHE_TTL_CATEGORIES = 5 * 60 * 1000; // 5분
+const CACHE_TTL_PRODUCTS = 2 * 60 * 1000;   // 2분
 
 // 크롤링 상태 관리
 let isCrawling = false;
@@ -108,7 +113,23 @@ router.get('/ingest/status', (req, res) => {
  */
 router.get('/categories', async (req, res) => {
   try {
+    // Vercel Edge 60초 캐시 + 5분 stale-while-revalidate
+    res.setHeader(
+      'Cache-Control',
+      's-maxage=60, stale-while-revalidate=300'
+    );
+
+    const cacheKey = 'categories';
+    const cached = getCached(cacheKey);
+    if (cached) {
+      return res.json({
+        success: true,
+        data: cached,
+      });
+    }
+
     const categories = await getCategories();
+    setCache(cacheKey, categories, CACHE_TTL_CATEGORIES);
     res.json({
       success: true,
       data: categories,
@@ -137,7 +158,37 @@ router.get('/products', async (req, res) => {
       limit: req.query.limit ? parseInt(req.query.limit) : null,
     };
 
+    // 필터 없는 전체 조회 시 Vercel Edge 캐시 활성화
+    const hasFilters = filters.categoryId
+      || filters.categorySlug
+      || filters.search;
+    if (!hasFilters) {
+      res.setHeader(
+        'Cache-Control',
+        's-maxage=30, stale-while-revalidate=120'
+      );
+    }
+    const cacheKey = hasFilters
+      ? null
+      : `products:all:${filters.limit || 'default'}`;
+
+    if (cacheKey) {
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return res.json({
+          success: true,
+          data: cached,
+          count: cached.length,
+        });
+      }
+    }
+
     const products = await getProducts(filters);
+
+    if (cacheKey) {
+      setCache(cacheKey, products, CACHE_TTL_PRODUCTS);
+    }
+
     res.json({
       success: true,
       data: products,
