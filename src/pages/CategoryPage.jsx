@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import ProductCard from "../components/ProductCard";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 function buildImageUrl(imagePath) {
     if (!imagePath) return "";

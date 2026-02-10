@@ -19,7 +19,7 @@ import SearchModal from "./SearchModal";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  "http://localhost:3001/api";
+  "/api";
 
 export default function Header() {
   const navigate = useNavigate();
