@@ -25,13 +25,13 @@ const config = {
   },
   pool: {
     max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000,
+    min: 1,
+    idleTimeoutMillis: 60000,
   },
   // 서버리스 환경(Vercel 30s 제한) 대응:
-  // 연결 8s + 재시도 1회(2s 대기 + 8s) = 최대 18s
-  connectionTimeout: 8000,
-  requestTimeout: 15000,
+  // 연결 5s + 재시도 1회(2s 대기 + 5s) = 최대 12s
+  connectionTimeout: 5000,
+  requestTimeout: 10000,
 };
 
 let pool = null;
@@ -48,16 +48,15 @@ const MAX_RETRIES = 2;
  * - 최대 3회 재시도 (exponential backoff)
  */
 export async function getPool() {
-  if (pool?.connected) {
+  if (pool?.connected || pool?._connected) {
     return pool;
   }
 
-  // 기존 풀이 있지만 연결이 끊긴 경우 정리
   if (pool) {
     try {
       await pool.close();
     } catch {
-      // 이미 닫혔거나 에러 무시
+      /* already closed */
     }
     pool = null;
   }

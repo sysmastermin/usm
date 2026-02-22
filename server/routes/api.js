@@ -5,9 +5,10 @@ import { getCached, setCache, clearCache } from '../utils/cache.js';
 
 const router = express.Router();
 
-/** 캐시 TTL 상수 */
-const CACHE_TTL_CATEGORIES = 5 * 60 * 1000; // 5분
-const CACHE_TTL_PRODUCTS = 2 * 60 * 1000;   // 2분
+/** 캐시 TTL 상수 (서버리스 warm 인스턴스 활용 극대화) */
+const CACHE_TTL_CATEGORIES = 10 * 60 * 1000; // 10분
+const CACHE_TTL_PRODUCTS = 5 * 60 * 1000;    // 5분
+const CACHE_TTL_PRODUCT_DETAIL = 5 * 60 * 1000; // 5분
 
 // 크롤링 상태 관리
 let isCrawling = false;
@@ -152,25 +153,36 @@ router.get('/categories', async (req, res) => {
 router.get('/products', async (req, res) => {
   try {
     const filters = {
-      categoryId: req.query.categoryId ? parseInt(req.query.categoryId) : null,
+      categoryId: req.query.categoryId
+        ? parseInt(req.query.categoryId)
+        : null,
       categorySlug: req.query.categorySlug || null,
       search: req.query.search || null,
-      limit: req.query.limit ? parseInt(req.query.limit) : null,
+      limit: req.query.limit
+        ? parseInt(req.query.limit)
+        : null,
     };
 
-    // 필터 없는 전체 조회 시 Vercel Edge 캐시 활성화
-    const hasFilters = filters.categoryId
-      || filters.categorySlug
-      || filters.search;
-    if (!hasFilters) {
+    // Vercel Edge 캐시: 검색 제외 모든 요청에 적용
+    if (!filters.search) {
       res.setHeader(
         'Cache-Control',
         's-maxage=30, stale-while-revalidate=120'
       );
     }
-    const cacheKey = hasFilters
-      ? null
-      : `products:all:${filters.limit || 'default'}`;
+
+    // 캐시 키: 검색어만 제외하고 모두 캐싱
+    let cacheKey = null;
+    if (filters.search) {
+      cacheKey = null;
+    } else if (filters.categorySlug) {
+      cacheKey = `products:slug:${filters.categorySlug}`;
+    } else if (filters.categoryId) {
+      cacheKey = `products:catId:${filters.categoryId}`;
+    } else {
+      cacheKey =
+        `products:all:${filters.limit || 'default'}`;
+    }
 
     if (cacheKey) {
       const cached = getCached(cacheKey);
@@ -218,6 +230,20 @@ router.get('/products/:id', async (req, res) => {
       });
     }
 
+    res.setHeader(
+      'Cache-Control',
+      's-maxage=60, stale-while-revalidate=300'
+    );
+
+    const cacheKey = `product:${id}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      return res.json({
+        success: true,
+        data: cached,
+      });
+    }
+
     const product = await getProductById(id);
     if (!product) {
       return res.status(404).json({
@@ -225,6 +251,8 @@ router.get('/products/:id', async (req, res) => {
         message: '상품을 찾을 수 없습니다',
       });
     }
+
+    setCache(cacheKey, product, CACHE_TTL_PRODUCT_DETAIL);
 
     res.json({
       success: true,
@@ -254,6 +282,20 @@ router.get('/products/legacy/:id', async (req, res) => {
       });
     }
 
+    res.setHeader(
+      'Cache-Control',
+      's-maxage=60, stale-while-revalidate=300'
+    );
+
+    const cacheKey = `product:legacy:${id}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      return res.json({
+        success: true,
+        data: cached,
+      });
+    }
+
     const product = await getProductByLegacyId(id);
     if (!product) {
       return res.status(404).json({
@@ -261,6 +303,12 @@ router.get('/products/legacy/:id', async (req, res) => {
         message: '상품을 찾을 수 없습니다',
       });
     }
+
+    setCache(
+      cacheKey,
+      product,
+      CACHE_TTL_PRODUCT_DETAIL
+    );
 
     res.json({
       success: true,
