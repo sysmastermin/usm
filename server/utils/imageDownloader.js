@@ -7,7 +7,8 @@ import pLimit from 'p-limit';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 프로젝트 루트 경로 (server/utils -> server -> 프로젝트 루트)
+const IS_SERVERLESS = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const IMAGES_DIR = path.join(PROJECT_ROOT, 'server', 'public', 'images');
 const PRODUCTS_IMAGES_DIR = path.join(IMAGES_DIR, 'products');
@@ -15,8 +16,13 @@ const CATEGORIES_IMAGES_DIR = path.join(IMAGES_DIR, 'categories');
 
 /**
  * 이미지 디렉토리 초기화
+ * Vercel 서버리스 환경은 읽기 전용이므로 스킵
  */
 export async function ensureImageDirectories() {
+  if (IS_SERVERLESS) {
+    console.log('⚡ 서버리스 환경 감지 - 이미지 로컬 저장 비활성화 (CDN URL 사용)');
+    return;
+  }
   try {
     await fs.mkdir(PRODUCTS_IMAGES_DIR, { recursive: true });
     await fs.mkdir(CATEGORIES_IMAGES_DIR, { recursive: true });
@@ -101,8 +107,11 @@ export async function downloadAndSaveImage(imageUrl, type = 'product', productCo
     return null;
   }
 
+  if (IS_SERVERLESS) {
+    return imageUrl;
+  }
+
   try {
-    // 이미지 다운로드
     const response = await axios.get(imageUrl, {
       responseType: 'arraybuffer',
       timeout: 30000,
@@ -111,26 +120,19 @@ export async function downloadAndSaveImage(imageUrl, type = 'product', productCo
       },
     });
 
-    // Content-Type 확인
     const contentType = response.headers['content-type'];
     if (!contentType || !contentType.startsWith('image/')) {
       console.warn(`⚠️ 이미지가 아닌 파일: ${imageUrl} (Content-Type: ${contentType})`);
       return null;
     }
 
-    // 저장 디렉토리 선택
     const saveDir = type === 'product' ? PRODUCTS_IMAGES_DIR : CATEGORIES_IMAGES_DIR;
-    
-    // 파일명 생성 (productId 포함하여 고유성 보장)
     const fileName = generateSafeFileName(imageUrl, productCode, productId);
     const filePath = path.join(saveDir, fileName);
 
-    // 파일 저장
     await fs.writeFile(filePath, response.data);
 
-    // 웹에서 접근 가능한 경로 반환 (서버 루트 기준)
     const webPath = `/images/${type === 'product' ? 'products' : 'categories'}/${fileName}`;
-    
     console.log(`  💾 이미지 저장 완료: ${webPath}`);
     return webPath;
   } catch (error) {
