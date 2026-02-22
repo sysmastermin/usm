@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2, Check } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Check, Search } from 'lucide-react';
 import { useUserAuth } from '../../context/UserAuthContext';
+import { useDaumPostcode } from '../../hooks/useDaumPostcode';
 
 /** 비밀번호 강도 계산 (0~4) */
 function getPasswordStrength(pw) {
@@ -53,6 +54,29 @@ export default function RegisterPage() {
   const [agreed, setAgreed] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const addressDetailRef = useRef(null);
+
+  const handleAddressComplete = useCallback(
+    ({ zonecode, address }) => {
+      setForm((prev) => ({
+        ...prev,
+        zipcode: zonecode,
+        address,
+        addressDetail: '',
+      }));
+      setFieldErrors((prev) => ({
+        ...prev,
+        zipcode: '',
+        address: '',
+      }));
+      setTimeout(() => addressDetailRef.current?.focus(), 50);
+    },
+    []
+  );
+
+  const { open: openPostcode } = useDaumPostcode({
+    onComplete: handleAddressComplete,
+  });
 
   // 이미 로그인 상태면 홈으로
   useEffect(() => {
@@ -287,34 +311,45 @@ export default function RegisterPage() {
         </Field>
 
         {/* 주소 */}
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="우편번호" className="col-span-1">
+        <Field label="우편번호">
+          <div className="flex gap-2">
             <input
               type="text"
+              readOnly
               value={form.zipcode}
-              onChange={(e) =>
-                updateField('zipcode', e.target.value)
-              }
-              className={inputCls()}
-              placeholder="12345"
-              maxLength={5}
+              className={inputCls(
+                null,
+                'flex-1 bg-gray-50 dark:bg-gray-800 cursor-default'
+              )}
+              placeholder="우편번호"
+              tabIndex={-1}
             />
-          </Field>
-          <Field label="주소" className="col-span-2">
-            <input
-              type="text"
-              autoComplete="street-address"
-              value={form.address}
-              onChange={(e) =>
-                updateField('address', e.target.value)
-              }
-              className={inputCls()}
-              placeholder="서울시 강남구 역삼동"
-            />
-          </Field>
-        </div>
+            <button
+              type="button"
+              onClick={openPostcode}
+              className="shrink-0 px-4 py-3 bg-black dark:bg-white text-white dark:text-black text-sm font-medium rounded-sm hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors flex items-center gap-1.5"
+            >
+              <Search className="w-4 h-4" />
+              주소 검색
+            </button>
+          </div>
+        </Field>
+        <Field label="주소">
+          <input
+            type="text"
+            readOnly
+            value={form.address}
+            className={inputCls(
+              null,
+              'bg-gray-50 dark:bg-gray-800 cursor-default'
+            )}
+            placeholder="주소 검색 버튼을 클릭하세요"
+            tabIndex={-1}
+          />
+        </Field>
         <Field label="상세주소">
           <input
+            ref={addressDetailRef}
             type="text"
             value={form.addressDetail}
             onChange={(e) =>
