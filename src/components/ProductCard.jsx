@@ -23,7 +23,9 @@ export default function ProductCard({ product }) {
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{product.category}</p>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white mt-2">
-                        {product.price}원
+                        {product.price
+                          ? `${Number(product.price).toLocaleString()}원`
+                          : '가격 문의'}
                     </p>
                 </div>
             </div>
