@@ -911,7 +911,7 @@ export async function deleteProduct(id) {
  * - detail_url은 수동 등록용 고유값 자동 생성
  */
 export async function createProduct(fields) {
-  if (!fields.name_ja || fields.name_ja.trim() === '') {
+  if (typeof fields.name_ja !== 'string' || fields.name_ja.trim() === '') {
     throw new Error(
       '상품명(일본어)은 필수 입력입니다'
     );
@@ -998,11 +998,20 @@ export async function getAdminCategories() {
   const query = `
     SELECT
       c.id, c.name_ja, c.name_ko, c.slug,
-      c.url, c.image_url,
+      c.url,
+      COALESCE(c.image_url, p_first.image_url)
+        AS image_url,
       c.created_at, c.updated_at,
       (SELECT COUNT(*) FROM [dbo].[products]
         WHERE category_id = c.id) AS product_count
     FROM [dbo].[categories] c
+    OUTER APPLY (
+      SELECT TOP 1 p.image_url
+      FROM [dbo].[products] p
+      WHERE p.category_id = c.id
+        AND p.image_url IS NOT NULL
+      ORDER BY p.rank DESC, p.id
+    ) p_first
     ORDER BY c.name_ja
   `;
 
