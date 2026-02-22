@@ -906,6 +906,90 @@ export async function deleteProduct(id) {
 }
 
 /**
+ * 관리자 상품 등록 (수동)
+ * - 화이트리스트 방식으로 허용된 필드만 INSERT
+ * - detail_url은 수동 등록용 고유값 자동 생성
+ */
+export async function createProduct(fields) {
+  if (!fields.name_ja || fields.name_ja.trim() === '') {
+    throw new Error(
+      '상품명(일본어)은 필수 입력입니다'
+    );
+  }
+
+  const pool = await getPool();
+  const request = pool.request();
+
+  const detailUrl =
+    `manual://${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  request.input(
+    'detail_url', sql.NVarChar(500), detailUrl
+  );
+
+  const columns = ['detail_url'];
+  const values = ['@detail_url'];
+
+  for (const key of PRODUCT_UPDATABLE_FIELDS) {
+    if (fields[key] !== undefined) {
+      let value = fields[key];
+
+      if (
+        typeof value === 'object'
+        && value !== null
+        && !Array.isArray(value)
+      ) {
+        value = JSON.stringify(value);
+      }
+      if (Array.isArray(value)) {
+        value = JSON.stringify(value);
+      }
+
+      if (
+        ['price', 'regular_price', 'sale_price']
+          .includes(key)
+      ) {
+        value =
+          value !== null && value !== ''
+            ? parseFloat(value)
+            : null;
+      }
+      if (['rank', 'category_id'].includes(key)) {
+        value =
+          value !== null && value !== ''
+            ? parseInt(value)
+            : null;
+      }
+
+      request.input(
+        key,
+        PRODUCT_FIELD_TYPES[key] || sql.NVarChar(500),
+        value
+      );
+      columns.push(`[${key}]`);
+      values.push(`@${key}`);
+    }
+  }
+
+  const query = `
+    INSERT INTO [dbo].[products]
+      (${columns.join(', ')})
+    VALUES
+      (${values.join(', ')});
+
+    SELECT p.*, c.name_ko AS category_name_ko,
+      c.name_ja AS category_name_ja,
+      c.slug AS category_slug
+    FROM [dbo].[products] p
+    LEFT JOIN [dbo].[categories] c
+      ON p.category_id = c.id
+    WHERE p.id = SCOPE_IDENTITY();
+  `;
+
+  const result = await request.query(query);
+  return result.recordset[0] || null;
+}
+
+/**
  * 관리자 카테고리 목록 (소속 상품 수 포함)
  */
 export async function getAdminCategories() {

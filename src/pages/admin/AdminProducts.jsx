@@ -5,6 +5,7 @@ import {
   Pencil,
   Trash2,
   Languages,
+  Plus,
 } from 'lucide-react';
 import adminApi from '../../lib/adminApi';
 import DataTable from '../../components/admin/DataTable';
@@ -288,9 +289,27 @@ export default function AdminProducts() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-        상품 관리
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+          상품 관리
+        </h1>
+        <button
+          onClick={() => navigate('/admin/products/new')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2.5 rounded-lg',
+            'text-sm font-medium',
+            'bg-gray-900 dark:bg-white',
+            'text-white dark:text-gray-900',
+            'hover:bg-gray-800 dark:hover:bg-gray-100',
+            'transition-colors min-h-[44px]'
+          )}
+        >
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">
+            상품 등록
+          </span>
+        </button>
+      </div>
 
       {/* 필터 영역 */}
       <div className="flex flex-col sm:flex-row gap-3">

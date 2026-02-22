@@ -8,6 +8,7 @@ import {
   getDashboardStats,
   getAdminProducts,
   getProductById,
+  createProduct,
   updateProduct,
   deleteProduct,
   getAdminCategories,
@@ -78,6 +79,42 @@ router.get('/dashboard', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '대시보드 통계를 불러올 수 없습니다',
+    });
+  }
+});
+
+/* ----------------------------------------
+ * POST /api/admin/products
+ * 상품 등록 (수동)
+ * ---------------------------------------- */
+router.post('/products', async (req, res) => {
+  try {
+    if (
+      !req.body
+      || !req.body.name_ja
+      || req.body.name_ja.trim() === ''
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: '상품명(일본어)은 필수 입력입니다',
+      });
+    }
+
+    const product = await createProduct(req.body);
+
+    clearCache('products:*');
+
+    res.status(201).json({
+      success: true,
+      data: product,
+      message: '상품이 등록되었습니다',
+    });
+  } catch (error) {
+    console.error('상품 등록 실패:', error);
+    res.status(500).json({
+      success: false,
+      message:
+        error.message || '상품 등록에 실패했습니다',
     });
   }
 });
