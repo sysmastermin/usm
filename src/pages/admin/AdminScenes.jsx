@@ -212,19 +212,27 @@ export default function AdminScenes() {
                     <Image className="w-8 h-8 text-gray-300" />
                   </div>
                 )}
-                {scene.product_count > 0 && (
-                  <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Package className="w-3 h-3" />
-                    {scene.product_count}
-                  </div>
-                )}
               </div>
               <div className="p-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  {getCategoryLabel(
-                    scene.scene_category
-                  )}{' '}
-                  #{scene.scene_number}
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {getCategoryLabel(
+                      scene.scene_category
+                    )}{' '}
+                    #{scene.scene_number}
+                  </span>
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1',
+                      'text-xs font-medium px-1.5 py-0.5 rounded',
+                      scene.product_count > 0
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+                    )}
+                  >
+                    <Package className="w-3 h-3" />
+                    {scene.product_count}
+                  </span>
                 </div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                   {scene.title || '제목 없음'}
