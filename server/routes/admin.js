@@ -37,6 +37,7 @@ import {
   unlinkProductFromScene,
   updateSceneProductOrder,
   migrateFromJson,
+  fixAllSourceUrls,
 } from '../services/sceneService.js';
 import {
   crawlSceneProducts,
@@ -880,6 +881,13 @@ router.put(
 router.post('/scenes/crawl', async (req, res) => {
   try {
     const { sceneIds } = req.body;
+
+    const urlFix = await fixAllSourceUrls();
+    if (urlFix.fixed > 0) {
+      console.log(
+        `source_url 수정: ${urlFix.fixed}/${urlFix.total}개`
+      );
+    }
 
     let scenes;
     if (sceneIds && Array.isArray(sceneIds)) {

@@ -11,6 +11,50 @@ const BASE_URL = 'https://jp.shop.usm.com';
 const CRAWL_TIMEOUT = 30000;
 
 /**
+ * URL 접근 가능 여부를 확인 (HEAD 요청)
+ * @returns {boolean}
+ */
+async function isUrlAccessible(url) {
+  try {
+    const res = await axios.head(url, {
+      timeout: 10000,
+      maxRedirects: 5,
+      validateStatus: (s) => s < 400,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+          + 'AppleWebKit/537.36 (KHTML, like Gecko) '
+          + 'Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    return res.status < 400;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 씬의 올바른 USM Japan URL을 결정
+ *
+ * USM Japan은 카테고리별로 URL 형식이 다름:
+ *   - scene_{number}  (예: scene_81)
+ *   - scene_{category}{number} (예: scene_living52)
+ *
+ * 두 패턴을 모두 시도하여 유효한 URL 반환
+ */
+export async function resolveSceneUrl(category, number) {
+  const urlA =
+    `${BASE_URL}/collections/scene_${number}`;
+  const urlB =
+    `${BASE_URL}/collections/scene_${category}${number}`;
+
+  if (await isUrlAccessible(urlA)) return urlA;
+  if (await isUrlAccessible(urlB)) return urlB;
+
+  return urlA;
+}
+
+/**
  * 씬 페이지에서 연결 상품 코드를 추출
  * @param {string} url - 씬 페이지 URL
  * @returns {{ productCodes: string[], productUrls: string[] }}
@@ -102,9 +146,21 @@ async function extractSceneProducts(url) {
  * @returns {{ sceneId: number, linked: number, notFound: string[] }}
  */
 async function crawlSingleScene(scene) {
-  const url =
-    scene.source_url
-    || `${BASE_URL}/collections/scene_${scene.scene_category}${scene.scene_number}`;
+  let url = scene.source_url;
+
+  if (!url || url.includes(`scene_${scene.scene_category}${scene.scene_number}`)) {
+    url = await resolveSceneUrl(
+      scene.scene_category,
+      scene.scene_number
+    );
+
+    if (url !== scene.source_url) {
+      try {
+        const { updateScene } = await import('./sceneService.js');
+        await updateScene(scene.id, { source_url: url });
+      } catch { /* 업데이트 실패 무시 */ }
+    }
+  }
 
   console.log(`  크롤링: ${url}`);
   const { productCodes, productUrls } =

@@ -152,7 +152,7 @@ export async function createScene(data) {
     'source_url',
     sql.NVarChar,
     data.source_url
-      || `${BASE_URL}/collections/scene_${data.scene_category}${data.scene_number}`
+      || `${BASE_URL}/collections/scene_${data.scene_number}`
   );
   request.input('sort_order', sql.Int, data.sort_order || 0);
 
@@ -421,7 +421,7 @@ export async function migrateFromJson(sceneImagesData) {
       }
 
       const sourceUrl =
-        `${BASE_URL}/collections/scene_${category}${img.id}`;
+        `${BASE_URL}/collections/scene_${img.id}`;
 
       const insertReq = pool.request();
       insertReq.input('scene_category', sql.NVarChar, category);
@@ -445,6 +445,40 @@ export async function migrateFromJson(sceneImagesData) {
   }
 
   return { migrated, skipped };
+}
+
+/**
+ * 모든 씬의 source_url을 올바른 형식으로 일괄 수정
+ * scene_{category}{number} → scene_{number} (기본값)
+ * 크롤러의 resolveSceneUrl로 실제 접근 가능한 URL 검증
+ */
+export async function fixAllSourceUrls() {
+  const pool = await getPool();
+  const result = await pool.request().query(
+    'SELECT id, scene_category, scene_number, source_url FROM [dbo].[scenes]'
+  );
+
+  let fixed = 0;
+  for (const scene of result.recordset) {
+    const wrongPattern =
+      `${BASE_URL}/collections/scene_${scene.scene_category}${scene.scene_number}`;
+    const correctDefault =
+      `${BASE_URL}/collections/scene_${scene.scene_number}`;
+
+    if (scene.source_url === wrongPattern) {
+      await pool.request()
+        .input('id', sql.Int, scene.id)
+        .input('url', sql.NVarChar, correctDefault)
+        .query(`
+          UPDATE [dbo].[scenes]
+          SET source_url = @url, updated_at = GETDATE()
+          WHERE id = @id
+        `);
+      fixed++;
+    }
+  }
+
+  return { total: result.recordset.length, fixed };
 }
 
 /**
