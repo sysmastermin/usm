@@ -544,10 +544,23 @@ export async function getDashboardStats() {
       (SELECT COUNT(*) FROM [dbo].[products]
         WHERE image_url IS NOT NULL
           AND LEN(image_url) > 0)
-        AS productsWithImage
+        AS productsWithImage,
+      (SELECT COUNT(*) FROM [dbo].[orders])
+        AS totalOrders,
+      (SELECT COUNT(*) FROM [dbo].[orders]
+        WHERE status = 'pending')
+        AS pendingOrders,
+      (SELECT ISNULL(SUM(total_amount), 0)
+        FROM [dbo].[orders]
+        WHERE status != 'cancelled')
+        AS totalRevenue,
+      (SELECT COUNT(*) FROM [dbo].[orders]
+        WHERE CAST(created_at AS DATE)
+          = CAST(GETDATE() AS DATE))
+        AS todayOrders
   `;
 
-  const recentQuery = `
+  const recentProductsQuery = `
     SELECT TOP 5
       p.id, p.name_ja, p.name_ko, p.image_url,
       p.price, p.created_at, p.updated_at,
@@ -559,10 +572,22 @@ export async function getDashboardStats() {
     ORDER BY p.updated_at DESC
   `;
 
-  const [statsResult, recentResult] = await Promise.all([
-    pool.request().query(statsQuery),
-    pool.request().query(recentQuery),
-  ]);
+  const recentOrdersQuery = `
+    SELECT TOP 5
+      o.id, o.order_number, o.total_amount,
+      o.status, o.recipient_name, o.created_at,
+      u.name AS user_name
+    FROM [dbo].[orders] o
+    JOIN [dbo].[users] u ON o.user_id = u.id
+    ORDER BY o.created_at DESC
+  `;
+
+  const [statsResult, recentProductsResult, recentOrdersResult] =
+    await Promise.all([
+      pool.request().query(statsQuery),
+      pool.request().query(recentProductsQuery),
+      pool.request().query(recentOrdersQuery),
+    ]);
 
   const stats = statsResult.recordset[0];
   const total = stats.totalProducts || 1;
@@ -576,7 +601,12 @@ export async function getDashboardStats() {
     imageRate: Math.round(
       (stats.productsWithImage / total) * 100
     ),
-    recentProducts: recentResult.recordset,
+    totalOrders: stats.totalOrders,
+    pendingOrders: stats.pendingOrders,
+    totalRevenue: stats.totalRevenue,
+    todayOrders: stats.todayOrders,
+    recentProducts: recentProductsResult.recordset,
+    recentOrders: recentOrdersResult.recordset,
   };
 }
 

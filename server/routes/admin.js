@@ -19,6 +19,11 @@ import {
   saveCategoryTranslation,
 } from '../services/dbService.js';
 import {
+  getAdminOrders,
+  getAdminOrderDetail,
+  updateOrderStatus,
+} from '../services/shopService.js';
+import {
   translateJaToKo,
 } from '../utils/translator.js';
 import { clearCache } from '../utils/cache.js';
@@ -451,6 +456,115 @@ router.post('/translate', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '번역 처리 중 오류가 발생했습니다',
+    });
+  }
+});
+
+/* ----------------------------------------
+ * GET /api/admin/orders
+ * 주문 목록 (페이지네이션, 필터, 검색)
+ * ---------------------------------------- */
+router.get('/orders', async (req, res) => {
+  try {
+    const result = await getAdminOrders({
+      page: req.query.page,
+      limit: req.query.limit,
+      status: req.query.status,
+      search: req.query.search,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+    });
+    res.json({
+      success: true,
+      data: result.items,
+      meta: result.meta,
+    });
+  } catch (error) {
+    console.error('관리자 주문 조회 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: '주문 목록을 불러올 수 없습니다',
+    });
+  }
+});
+
+/* ----------------------------------------
+ * GET /api/admin/orders/:id
+ * 주문 상세 조회
+ * ---------------------------------------- */
+router.get('/orders/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: '유효하지 않은 주문 ID',
+      });
+    }
+
+    const order = await getAdminOrderDetail(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: '주문을 찾을 수 없습니다',
+      });
+    }
+
+    res.json({ success: true, data: order });
+  } catch (error) {
+    console.error('주문 상세 조회 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: '주문 정보를 불러올 수 없습니다',
+    });
+  }
+});
+
+/* ----------------------------------------
+ * PUT /api/admin/orders/:id/status
+ * 주문 상태 변경
+ * body: { status, memo? }
+ * ---------------------------------------- */
+router.put('/orders/:id/status', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: '유효하지 않은 주문 ID',
+      });
+    }
+
+    const { status, memo } = req.body;
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: '변경할 상태를 입력해주세요',
+      });
+    }
+
+    const result = await updateOrderStatus(
+      id,
+      status,
+      memo
+    );
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.message,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '주문 상태가 변경되었습니다',
+    });
+  } catch (error) {
+    console.error('주문 상태 변경 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: '주문 상태 변경에 실패했습니다',
     });
   }
 });

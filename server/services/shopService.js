@@ -780,3 +780,283 @@ export async function isInWishlist(userId, productId) {
     `);
   return result.recordset[0].cnt > 0;
 }
+
+/* ============================================================
+ * Admin Orders
+ * ============================================================ */
+
+const VALID_STATUSES = [
+  'pending',
+  'confirmed',
+  'shipping',
+  'delivered',
+  'cancelled',
+];
+
+const STATUS_TRANSITIONS = {
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['shipping', 'cancelled'],
+  shipping: ['delivered'],
+  delivered: [],
+  cancelled: [],
+};
+
+/**
+ * 관리자 주문 목록 (페이지네이션, 필터, 검색)
+ */
+export async function getAdminOrders(options = {}) {
+  const pool = await getPool();
+  const request = pool.request();
+
+  const page = Math.max(1, parseInt(options.page) || 1);
+  const limit = Math.min(
+    Math.max(1, parseInt(options.limit) || 20),
+    100
+  );
+  const offset = (page - 1) * limit;
+
+  const conditions = [];
+
+  if (
+    options.status &&
+    VALID_STATUSES.includes(options.status)
+  ) {
+    request.input(
+      'status',
+      sql.NVarChar(20),
+      options.status
+    );
+    conditions.push('o.status = @status');
+  }
+
+  if (options.search) {
+    request.input(
+      'search',
+      sql.NVarChar(255),
+      `%${options.search}%`
+    );
+    conditions.push(
+      '(o.order_number LIKE @search'
+      + ' OR o.recipient_name LIKE @search'
+      + ' OR u.name LIKE @search'
+      + ' OR u.email LIKE @search)'
+    );
+  }
+
+  if (options.startDate) {
+    request.input(
+      'startDate',
+      sql.NVarChar(10),
+      options.startDate
+    );
+    conditions.push(
+      'CAST(o.created_at AS DATE) >= @startDate'
+    );
+  }
+
+  if (options.endDate) {
+    request.input(
+      'endDate',
+      sql.NVarChar(10),
+      options.endDate
+    );
+    conditions.push(
+      'CAST(o.created_at AS DATE) <= @endDate'
+    );
+  }
+
+  const where = conditions.length > 0
+    ? 'WHERE ' + conditions.join(' AND ')
+    : '';
+
+  request.input('offset', sql.Int, offset);
+  request.input('limit', sql.Int, limit);
+
+  const result = await request.query(`
+    SELECT
+      o.id, o.order_number, o.total_amount, o.status,
+      o.recipient_name, o.recipient_phone,
+      o.created_at, o.updated_at,
+      u.name AS user_name, u.email AS user_email,
+      COUNT(*) OVER() AS total_count
+    FROM orders o
+    JOIN users u ON o.user_id = u.id
+    ${where}
+    ORDER BY o.created_at DESC
+    OFFSET @offset ROWS
+    FETCH NEXT @limit ROWS ONLY
+  `);
+
+  const rows = result.recordset;
+  const total = rows.length > 0 ? rows[0].total_count : 0;
+
+  return {
+    items: rows.map(({ total_count, ...rest }) => rest),
+    meta: { page, limit, total },
+  };
+}
+
+/**
+ * 관리자 주문 상세 (user_id 제한 없음)
+ */
+export async function getAdminOrderDetail(orderId) {
+  const pool = await getPool();
+
+  const orderResult = await pool
+    .request()
+    .input('orderId', sql.Int, orderId)
+    .query(`
+      SELECT
+        o.*,
+        u.name AS user_name,
+        u.email AS user_email,
+        u.phone AS user_phone
+      FROM orders o
+      JOIN users u ON o.user_id = u.id
+      WHERE o.id = @orderId
+    `);
+
+  const order = orderResult.recordset[0];
+  if (!order) return null;
+
+  const itemsResult = await pool
+    .request()
+    .input('orderId2', sql.Int, orderId)
+    .query(`
+      SELECT * FROM order_items
+      WHERE order_id = @orderId2
+    `);
+
+  return {
+    ...order,
+    items: itemsResult.recordset,
+  };
+}
+
+/**
+ * 관리자 주문 상태 변경
+ * @returns {{ success: boolean, message?: string }}
+ */
+export async function updateOrderStatus(
+  orderId,
+  newStatus,
+  adminMemo
+) {
+  if (!VALID_STATUSES.includes(newStatus)) {
+    return {
+      success: false,
+      message: `유효하지 않은 상태: ${newStatus}`,
+    };
+  }
+
+  const pool = await getPool();
+
+  const current = await pool
+    .request()
+    .input('orderId', sql.Int, orderId)
+    .query(`
+      SELECT status FROM orders WHERE id = @orderId
+    `);
+
+  if (current.recordset.length === 0) {
+    return {
+      success: false,
+      message: '주문을 찾을 수 없습니다',
+    };
+  }
+
+  const currentStatus = current.recordset[0].status;
+  const allowed =
+    STATUS_TRANSITIONS[currentStatus] || [];
+
+  if (!allowed.includes(newStatus)) {
+    return {
+      success: false,
+      message:
+        `'${currentStatus}' 상태에서 `
+        + `'${newStatus}'(으)로 변경할 수 없습니다`,
+    };
+  }
+
+  const req = pool
+    .request()
+    .input('orderId', sql.Int, orderId)
+    .input('newStatus', sql.NVarChar(20), newStatus);
+
+  let setClause =
+    'status = @newStatus, updated_at = GETDATE()';
+
+  if (adminMemo !== undefined) {
+    req.input(
+      'adminMemo',
+      sql.NVarChar(500),
+      adminMemo
+    );
+    setClause += ', memo = @adminMemo';
+  }
+
+  await req.query(`
+    UPDATE orders SET ${setClause} WHERE id = @orderId
+  `);
+
+  return { success: true };
+}
+
+/**
+ * 주문 통계 (대시보드용)
+ */
+export async function getOrderStats() {
+  const pool = await getPool();
+
+  const result = await pool.request().query(`
+    SELECT
+      (SELECT COUNT(*) FROM orders)
+        AS totalOrders,
+      (SELECT COUNT(*) FROM orders
+        WHERE status = 'pending')
+        AS pendingOrders,
+      (SELECT COUNT(*) FROM orders
+        WHERE status = 'confirmed')
+        AS confirmedOrders,
+      (SELECT COUNT(*) FROM orders
+        WHERE status = 'shipping')
+        AS shippingOrders,
+      (SELECT COUNT(*) FROM orders
+        WHERE status = 'delivered')
+        AS deliveredOrders,
+      (SELECT COUNT(*) FROM orders
+        WHERE status = 'cancelled')
+        AS cancelledOrders,
+      (SELECT ISNULL(SUM(total_amount), 0) FROM orders
+        WHERE status != 'cancelled')
+        AS totalRevenue,
+      (SELECT COUNT(*) FROM orders
+        WHERE CAST(created_at AS DATE)
+          = CAST(GETDATE() AS DATE))
+        AS todayOrders
+  `);
+
+  return result.recordset[0];
+}
+
+/**
+ * 최근 주문 5건 (대시보드용)
+ */
+export async function getRecentOrders(limit = 5) {
+  const pool = await getPool();
+
+  const result = await pool
+    .request()
+    .input('limit', sql.Int, limit)
+    .query(`
+      SELECT TOP (@limit)
+        o.id, o.order_number, o.total_amount,
+        o.status, o.recipient_name, o.created_at,
+        u.name AS user_name, u.email AS user_email
+      FROM orders o
+      JOIN users u ON o.user_id = u.id
+      ORDER BY o.created_at DESC
+    `);
+
+  return result.recordset;
+}

@@ -7,6 +7,8 @@ import {
   ImageIcon,
   Activity,
   Clock,
+  ShoppingCart,
+  AlertCircle,
 } from 'lucide-react';
 import adminApi, { publicApi } from '../../lib/adminApi';
 import StatsCard from '../../components/admin/StatsCard';
@@ -65,7 +67,7 @@ export default function AdminDashboard() {
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
           대시보드
         </h1>
-        <LoadingSkeleton variant="stats" count={4} />
+        <LoadingSkeleton variant="stats" count={8} />
         <LoadingSkeleton variant="card" count={5} />
       </div>
     );
@@ -99,7 +101,7 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* 통계 카드 */}
+      {/* 통계 카드 - 상품 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
           icon={Package}
@@ -128,6 +130,44 @@ export default function AdminDashboard() {
           value={stats?.imageRate ?? 0}
           suffix="%"
           color="amber"
+        />
+      </div>
+
+      {/* 통계 카드 - 주문 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard
+          icon={ShoppingCart}
+          label="전체 주문"
+          value={stats?.totalOrders ?? 0}
+          suffix="건"
+          color="blue"
+        />
+        <StatsCard
+          icon={AlertCircle}
+          label="처리 대기"
+          value={stats?.pendingOrders ?? 0}
+          suffix="건"
+          color="amber"
+        />
+        <StatsCard
+          icon={ShoppingCart}
+          label="오늘 주문"
+          value={stats?.todayOrders ?? 0}
+          suffix="건"
+          color="green"
+        />
+        <StatsCard
+          icon={ShoppingCart}
+          label="총 매출"
+          value={
+            stats?.totalRevenue
+              ? Number(
+                  stats.totalRevenue
+                ).toLocaleString()
+              : '0'
+          }
+          suffix="원"
+          color="purple"
         />
       </div>
 
@@ -317,6 +357,137 @@ export default function AdminDashboard() {
           </p>
         )}
       </div>
+
+      {/* 최근 주문 */}
+      <div
+        className={cn(
+          'bg-white dark:bg-gray-800 rounded-xl p-5',
+          'border border-gray-200 dark:border-gray-700'
+        )}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            <h2 className="font-semibold text-gray-900 dark:text-white">
+              최근 주문
+            </h2>
+          </div>
+          <button
+            onClick={() => navigate('/admin/orders')}
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            전체 보기
+          </button>
+        </div>
+
+        {stats?.recentOrders?.length > 0 ? (
+          <div className="space-y-3">
+            {stats.recentOrders.map((order) => (
+              <div
+                key={order.id}
+                onClick={() =>
+                  navigate(`/admin/orders/${order.id}`)
+                }
+                className={cn(
+                  'flex items-center gap-3 p-3 rounded-lg',
+                  'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+                  'cursor-pointer transition-colors'
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {order.order_number}
+                    </p>
+                    <OrderStatusBadge
+                      status={order.status}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {order.user_name}
+                    {' → '}
+                    {order.recipient_name}
+                    {' · '}
+                    {formatOrderDate(order.created_at)}
+                  </p>
+                </div>
+
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-300 hidden sm:block whitespace-nowrap">
+                  {Number(
+                    order.total_amount
+                  ).toLocaleString()}
+                  원
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 text-center py-4">
+            주문 데이터가 없습니다
+          </p>
+        )}
+      </div>
     </div>
   );
+}
+
+const ORDER_STATUS_MAP = {
+  pending: {
+    label: '주문접수',
+    cls:
+      'bg-amber-100 text-amber-700'
+      + ' dark:bg-amber-900/30 dark:text-amber-400',
+  },
+  confirmed: {
+    label: '주문확인',
+    cls:
+      'bg-blue-100 text-blue-700'
+      + ' dark:bg-blue-900/30 dark:text-blue-400',
+  },
+  shipping: {
+    label: '배송중',
+    cls:
+      'bg-purple-100 text-purple-700'
+      + ' dark:bg-purple-900/30 dark:text-purple-400',
+  },
+  delivered: {
+    label: '배송완료',
+    cls:
+      'bg-green-100 text-green-700'
+      + ' dark:bg-green-900/30 dark:text-green-400',
+  },
+  cancelled: {
+    label: '취소',
+    cls:
+      'bg-red-100 text-red-700'
+      + ' dark:bg-red-900/30 dark:text-red-400',
+  },
+};
+
+function OrderStatusBadge({ status }) {
+  const info = ORDER_STATUS_MAP[status] || {
+    label: status,
+    cls: 'bg-gray-100 text-gray-700',
+  };
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-1.5 py-0.5',
+        'rounded text-xs font-medium',
+        info.cls
+      )}
+    >
+      {info.label}
+    </span>
+  );
+}
+
+function formatOrderDate(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${m}.${day} ${h}:${min}`;
 }

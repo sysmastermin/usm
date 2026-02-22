@@ -2,6 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
+  ShoppingCart,
   FolderTree,
   Bot,
   Languages,
@@ -25,6 +26,11 @@ const NAV_ITEMS = [
     to: '/admin/products',
     label: '상품 관리',
     icon: Package,
+  },
+  {
+    to: '/admin/orders',
+    label: '주문 관리',
+    icon: ShoppingCart,
   },
   {
     to: '/admin/categories',
