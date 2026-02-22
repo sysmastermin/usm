@@ -4,6 +4,8 @@ import { getPool, closePool } from './config/db.js';
 import {
   createCategoriesTable,
   createProductsTable,
+  createScenesTable,
+  createSceneProductLinksTable,
 } from './services/dbService.js';
 import {
   createShopTables,
@@ -23,6 +25,8 @@ async function startServer() {
     console.log('📋 테이블 마이그레이션 실행 중...');
     await createCategoriesTable();
     await createProductsTable();
+    await createScenesTable();
+    await createSceneProductLinksTable();
     await createShopTables();
     console.log('✅ 테이블 마이그레이션 완료');
 

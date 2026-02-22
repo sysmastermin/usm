@@ -6,6 +6,7 @@ import {
   FolderTree,
   Bot,
   Languages,
+  ImageIcon,
   LogOut,
   X,
   Moon,
@@ -36,6 +37,11 @@ const NAV_ITEMS = [
     to: '/admin/categories',
     label: '카테고리',
     icon: FolderTree,
+  },
+  {
+    to: '/admin/scenes',
+    label: '씬 관리',
+    icon: ImageIcon,
   },
   {
     to: '/admin/crawler',

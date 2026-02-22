@@ -27,6 +27,19 @@ import {
   translateJaToKo,
 } from '../utils/translator.js';
 import { clearCache } from '../utils/cache.js';
+import {
+  getAdminScenes,
+  getSceneById,
+  updateScene,
+  deleteScene,
+  linkProductToScene,
+  unlinkProductFromScene,
+  updateSceneProductOrder,
+  migrateFromJson,
+} from '../services/sceneService.js';
+import {
+  crawlSceneProducts,
+} from '../services/sceneCrawler.js';
 
 const router = express.Router();
 
@@ -565,6 +578,351 @@ router.put('/orders/:id/status', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '주문 상태 변경에 실패했습니다',
+    });
+  }
+});
+
+/* ============================================================
+ * 씬 관리 API
+ * ============================================================ */
+
+/**
+ * GET /api/admin/scenes
+ * 씬 목록 (필터: category, search)
+ */
+router.get('/scenes', async (req, res) => {
+  try {
+    const scenes = await getAdminScenes({
+      category: req.query.category,
+      search: req.query.search,
+    });
+    res.json({ success: true, data: scenes });
+  } catch (error) {
+    console.error('관리자 씬 목록 조회 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: '씬 목록을 불러올 수 없습니다',
+    });
+  }
+});
+
+/**
+ * GET /api/admin/scenes/:id
+ * 씬 상세 + 연결 상품
+ */
+router.get('/scenes/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: '유효하지 않은 씬 ID',
+      });
+    }
+
+    const scene = await getSceneById(id);
+    if (!scene) {
+      return res.status(404).json({
+        success: false,
+        message: '씬을 찾을 수 없습니다',
+      });
+    }
+
+    res.json({ success: true, data: scene });
+  } catch (error) {
+    console.error('씬 상세 조회 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: '씬 정보를 불러올 수 없습니다',
+    });
+  }
+});
+
+/**
+ * PUT /api/admin/scenes/:id
+ * 씬 수정 (title, description 등)
+ */
+router.put('/scenes/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: '유효하지 않은 씬 ID',
+      });
+    }
+
+    const updated = await updateScene(id, req.body);
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: '씬을 찾을 수 없습니다',
+      });
+    }
+
+    clearCache('scenes:*');
+    clearCache('scene:*');
+
+    res.json({
+      success: true,
+      data: updated,
+      message: '씬이 수정되었습니다',
+    });
+  } catch (error) {
+    console.error('씬 수정 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '씬 수정에 실패했습니다',
+    });
+  }
+});
+
+/**
+ * DELETE /api/admin/scenes/:id
+ * 씬 삭제
+ */
+router.delete('/scenes/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: '유효하지 않은 씬 ID',
+      });
+    }
+
+    await deleteScene(id);
+    clearCache('scenes:*');
+    clearCache('scene:*');
+
+    res.json({
+      success: true,
+      message: '씬이 삭제되었습니다',
+    });
+  } catch (error) {
+    console.error('씬 삭제 실패:', error);
+    res.status(500).json({
+      success: false,
+      message:
+        error.message || '씬 삭제에 실패했습니다',
+    });
+  }
+});
+
+/**
+ * POST /api/admin/scenes/:id/products
+ * 씬에 상품 연결
+ * body: { productId, sortOrder? }
+ */
+router.post(
+  '/scenes/:id/products',
+  async (req, res) => {
+    try {
+      const sceneId = parseInt(req.params.id);
+      const { productId, sortOrder } = req.body;
+
+      if (isNaN(sceneId) || !productId) {
+        return res.status(400).json({
+          success: false,
+          message: '씬 ID와 상품 ID가 필요합니다',
+        });
+      }
+
+      const link = await linkProductToScene(
+        sceneId,
+        parseInt(productId),
+        sortOrder || 0
+      );
+
+      clearCache('scenes:*');
+      clearCache('scene:*');
+
+      res.json({
+        success: true,
+        data: link,
+        message: '상품이 연결되었습니다',
+      });
+    } catch (error) {
+      console.error('상품 연결 실패:', error);
+      res.status(500).json({
+        success: false,
+        message:
+          error.message
+          || '상품 연결에 실패했습니다',
+      });
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/scenes/:id/products/:productId
+ * 씬에서 상품 연결 해제
+ */
+router.delete(
+  '/scenes/:id/products/:productId',
+  async (req, res) => {
+    try {
+      const sceneId = parseInt(req.params.id);
+      const productId = parseInt(req.params.productId);
+
+      if (isNaN(sceneId) || isNaN(productId)) {
+        return res.status(400).json({
+          success: false,
+          message: '유효하지 않은 ID',
+        });
+      }
+
+      await unlinkProductFromScene(sceneId, productId);
+      clearCache('scenes:*');
+      clearCache('scene:*');
+
+      res.json({
+        success: true,
+        message: '상품 연결이 해제되었습니다',
+      });
+    } catch (error) {
+      console.error('상품 연결 해제 실패:', error);
+      res.status(500).json({
+        success: false,
+        message: '상품 연결 해제에 실패했습니다',
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/admin/scenes/:id/products/order
+ * 씬 내 상품 순서 변경
+ * body: { productIds: number[] }
+ */
+router.put(
+  '/scenes/:id/products/order',
+  async (req, res) => {
+    try {
+      const sceneId = parseInt(req.params.id);
+      const { productIds } = req.body;
+
+      if (
+        isNaN(sceneId)
+        || !Array.isArray(productIds)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            '씬 ID와 상품 ID 배열이 필요합니다',
+        });
+      }
+
+      await updateSceneProductOrder(
+        sceneId,
+        productIds
+      );
+
+      clearCache('scenes:*');
+      clearCache('scene:*');
+
+      res.json({
+        success: true,
+        message: '상품 순서가 변경되었습니다',
+      });
+    } catch (error) {
+      console.error('상품 순서 변경 실패:', error);
+      res.status(500).json({
+        success: false,
+        message: '상품 순서 변경에 실패했습니다',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/scenes/crawl
+ * 씬 페이지 크롤링 (USM Japan에서 연결 상품 수집)
+ * body: { sceneIds?: number[] }
+ */
+router.post('/scenes/crawl', async (req, res) => {
+  try {
+    const { sceneIds } = req.body;
+
+    let scenes;
+    if (sceneIds && Array.isArray(sceneIds)) {
+      const all = await getAdminScenes();
+      scenes = all.filter((s) =>
+        sceneIds.includes(s.id)
+      );
+    } else {
+      scenes = await getAdminScenes();
+    }
+
+    if (scenes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '크롤링할 씬이 없습니다',
+      });
+    }
+
+    const result = await crawlSceneProducts(scenes);
+
+    clearCache('scenes:*');
+    clearCache('scene:*');
+
+    res.json({
+      success: true,
+      data: result,
+      message:
+        `${result.totalLinked}개 상품이 `
+        + `${result.totalScenes}개 씬에 연결되었습니다`,
+    });
+  } catch (error) {
+    console.error('씬 크롤링 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: '씬 크롤링에 실패했습니다',
+    });
+  }
+});
+
+/**
+ * POST /api/admin/scenes/migrate
+ * sceneImages.json에서 DB로 마이그레이션
+ */
+router.post('/scenes/migrate', async (req, res) => {
+  try {
+    const { readFileSync } = await import('fs');
+    const { resolve, dirname } = await import('path');
+    const { fileURLToPath } = await import('url');
+
+    const __dirname = dirname(
+      fileURLToPath(import.meta.url)
+    );
+    const jsonPath = resolve(
+      __dirname,
+      '../../src/data/sceneImages.json'
+    );
+    const sceneImagesData = JSON.parse(
+      readFileSync(jsonPath, 'utf-8')
+    );
+
+    const result = await migrateFromJson(
+      sceneImagesData
+    );
+
+    clearCache('scenes:*');
+
+    res.json({
+      success: true,
+      data: result,
+      message:
+        `마이그레이션 완료: ${result.migrated}개 `
+        + `생성, ${result.skipped}개 스킵`,
+    });
+  } catch (error) {
+    console.error('씬 마이그레이션 실패:', error);
+    res.status(500).json({
+      success: false,
+      message:
+        error.message
+        || '마이그레이션에 실패했습니다',
     });
   }
 });

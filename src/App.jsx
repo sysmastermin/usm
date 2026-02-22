@@ -73,6 +73,12 @@ const AdminCrawler = lazy(
 const AdminTranslations = lazy(
   () => import("./pages/admin/AdminTranslations")
 );
+const AdminScenes = lazy(
+  () => import("./pages/admin/AdminScenes")
+);
+const AdminSceneDetail = lazy(
+  () => import("./pages/admin/AdminSceneDetail")
+);
 
 /**
  * 페이지 로딩 UI
@@ -178,6 +184,8 @@ function App() {
         <Route path="orders" element={<AdminOrders />} />
         <Route path="orders/:id" element={<AdminOrderDetail />} />
         <Route path="categories" element={<AdminCategories />} />
+        <Route path="scenes" element={<AdminScenes />} />
+        <Route path="scenes/:id" element={<AdminSceneDetail />} />
         <Route path="crawler" element={<AdminCrawler />} />
         <Route path="translations" element={<AdminTranslations />} />
       </Route>

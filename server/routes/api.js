@@ -1,6 +1,7 @@
 import express from 'express';
 import { crawlAll } from '../services/crawler.js';
 import { saveCrawlResult, getCategories, getProducts, getProductById, getProductByLegacyId } from '../services/dbService.js';
+import { getAllScenes, getScenesByCategory, getSceneByCategoryAndNumber } from '../services/sceneService.js';
 import { getCached, setCache, clearCache } from '../utils/cache.js';
 
 const router = express.Router();
@@ -323,5 +324,115 @@ router.get('/products/legacy/:id', async (req, res) => {
     });
   }
 });
+
+/* ============================================================
+ * 씬 API
+ * ============================================================ */
+
+const CACHE_TTL_SCENES = 5 * 60 * 1000;
+
+/**
+ * GET /api/scenes
+ * 씬 목록 (카테고리별 그룹)
+ */
+router.get('/scenes', async (req, res) => {
+  try {
+    res.setHeader(
+      'Cache-Control',
+      's-maxage=60, stale-while-revalidate=300'
+    );
+
+    const cacheKey = 'scenes:all';
+    const cached = getCached(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached });
+    }
+
+    const scenes = await getAllScenes();
+    setCache(cacheKey, scenes, CACHE_TTL_SCENES);
+    res.json({ success: true, data: scenes });
+  } catch (error) {
+    console.error('씬 목록 조회 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: '씬 목록을 불러올 수 없습니다',
+    });
+  }
+});
+
+/**
+ * GET /api/scenes/:category
+ * 특정 카테고리 씬 목록
+ */
+router.get('/scenes/:category', async (req, res) => {
+  try {
+    const { category } = req.params;
+
+    res.setHeader(
+      'Cache-Control',
+      's-maxage=60, stale-while-revalidate=300'
+    );
+
+    const cacheKey = `scenes:cat:${category}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached });
+    }
+
+    const scenes = await getScenesByCategory(category);
+    setCache(cacheKey, scenes, CACHE_TTL_SCENES);
+    res.json({ success: true, data: scenes });
+  } catch (error) {
+    console.error('씬 카테고리 조회 실패:', error);
+    res.status(500).json({
+      success: false,
+      message: '씬 목록을 불러올 수 없습니다',
+    });
+  }
+});
+
+/**
+ * GET /api/scenes/:category/:number
+ * 씬 상세 + 연결 상품
+ */
+router.get(
+  '/scenes/:category/:number',
+  async (req, res) => {
+    try {
+      const { category, number } = req.params;
+
+      res.setHeader(
+        'Cache-Control',
+        's-maxage=30, stale-while-revalidate=120'
+      );
+
+      const cacheKey = `scene:${category}:${number}`;
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+
+      const scene = await getSceneByCategoryAndNumber(
+        category,
+        number
+      );
+      if (!scene) {
+        return res.status(404).json({
+          success: false,
+          message: '씬을 찾을 수 없습니다',
+        });
+      }
+
+      setCache(cacheKey, scene, CACHE_TTL_SCENES);
+      res.json({ success: true, data: scene });
+    } catch (error) {
+      console.error('씬 상세 조회 실패:', error);
+      res.status(500).json({
+        success: false,
+        message: '씬 정보를 불러올 수 없습니다',
+      });
+    }
+  }
+);
 
 export default router;

@@ -204,6 +204,73 @@ export async function createProductsTable() {
 }
 
 /**
+ * 씬 테이블 생성 (없는 경우)
+ */
+export async function createScenesTable() {
+  const pool = await getPool();
+  const query = `
+    IF NOT EXISTS (
+      SELECT * FROM sys.objects
+      WHERE object_id = OBJECT_ID(N'[dbo].[scenes]')
+        AND type in (N'U')
+    )
+    BEGIN
+      CREATE TABLE [dbo].[scenes] (
+        [id] INT IDENTITY(1,1) PRIMARY KEY,
+        [scene_category] NVARCHAR(50) NOT NULL,
+        [scene_number] NVARCHAR(20) NOT NULL,
+        [image_url] NVARCHAR(500) NULL,
+        [title] NVARCHAR(255) NULL,
+        [description] NVARCHAR(MAX) NULL,
+        [source_url] NVARCHAR(500) NULL,
+        [sort_order] INT DEFAULT 0,
+        [created_at] DATETIME2 DEFAULT GETDATE(),
+        [updated_at] DATETIME2 DEFAULT GETDATE()
+      );
+      CREATE UNIQUE INDEX UX_scenes_category_number
+        ON [dbo].[scenes]([scene_category], [scene_number]);
+      CREATE INDEX IX_scenes_category
+        ON [dbo].[scenes]([scene_category]);
+    END
+  `;
+  await pool.request().query(query);
+}
+
+/**
+ * 씬-상품 연결 테이블 생성 (없는 경우)
+ */
+export async function createSceneProductLinksTable() {
+  const pool = await getPool();
+  const query = `
+    IF NOT EXISTS (
+      SELECT * FROM sys.objects
+      WHERE object_id = OBJECT_ID(N'[dbo].[scene_product_links]')
+        AND type in (N'U')
+    )
+    BEGIN
+      CREATE TABLE [dbo].[scene_product_links] (
+        [id] INT IDENTITY(1,1) PRIMARY KEY,
+        [scene_id] INT NOT NULL,
+        [product_id] INT NOT NULL,
+        [sort_order] INT DEFAULT 0,
+        [created_at] DATETIME2 DEFAULT GETDATE(),
+        FOREIGN KEY ([scene_id])
+          REFERENCES [dbo].[scenes]([id]) ON DELETE CASCADE,
+        FOREIGN KEY ([product_id])
+          REFERENCES [dbo].[products]([id]) ON DELETE CASCADE
+      );
+      CREATE UNIQUE INDEX UX_scene_product
+        ON [dbo].[scene_product_links]([scene_id], [product_id]);
+      CREATE INDEX IX_spl_scene_id
+        ON [dbo].[scene_product_links]([scene_id]);
+      CREATE INDEX IX_spl_product_id
+        ON [dbo].[scene_product_links]([product_id]);
+    END
+  `;
+  await pool.request().query(query);
+}
+
+/**
  * 카테고리 Upsert
  */
 export async function upsertCategory(category) {
@@ -327,6 +394,8 @@ export async function saveCrawlResult(crawlResult) {
     // 테이블 생성
     await createCategoriesTable();
     await createProductsTable();
+    await createScenesTable();
+    await createSceneProductLinksTable();
 
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
