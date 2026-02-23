@@ -115,6 +115,12 @@ function AdminFallback() {
 function App() {
   return (
     <Routes>
+      {/* 컨피규레이터 (풀스크린 전용 레이아웃) */}
+      <Route
+        path="/configurator"
+        element={<ConfiguratorPage />}
+      />
+
       {/* 쇼핑몰 프론트엔드 */}
       <Route path="/" element={<Layout />}>
         <Route index element={<ProductList />} />
@@ -123,7 +129,6 @@ function App() {
         <Route path="scene/:sceneId/:imageId" element={<SceneDetailPage />} />
         <Route path="category/:categoryName" element={<CategoryPage />} />
         <Route path="color/:colorName" element={<ColorPage />} />
-        <Route path="configurator" element={<ConfiguratorPage />} />
 
         {/* 인증 페이지 (공개, Layout 내부) */}
         <Route

@@ -3,6 +3,16 @@ export const GRID_UNIT_MM = 250;
 /** Phase B: glTF 자산 경로. 자산 준비 후 public/models/haller 또는 CDN URL 설정. */
 export const HALLER_GLTF_BASE_URL = "";
 
+/** Phase B-3: frontType별 glTF 파일 매핑. 자산 확보 후 파일명 지정. */
+export const HALLER_GLTF_MODELS = {
+  frame: "frame.glb",
+  open: "frame.glb",
+  door: "door.glb",
+  drawer: "drawer.glb",
+  glass: "glass.glb",
+  glide: "glide.glb",
+};
+
 /** 참고 가격: 그리드 1단위(1×1×1) 기준 기본 단가 (원). 실제 단가는 백엔드/CS 확정 후 연동. */
 export const REFERENCE_PRICE_BASE_PER_UNIT = 80000;
 
@@ -17,6 +27,32 @@ export const REFERENCE_PRICE_FRONT_TYPE_MULTIPLIER = {
 export const HALLER_WIDTH_UNITS = [1, 1.5, 2, 2.5, 3];
 export const HALLER_HEIGHT_UNITS = [1, 1.5, 2, 2.5, 3];
 export const HALLER_DEPTH_UNITS = [0.75, 1, 1.25];
+
+export const HALLER_WIDTH_MM = HALLER_WIDTH_UNITS.map(
+  (u) => Math.round(u * GRID_UNIT_MM)
+);
+export const HALLER_HEIGHT_MM = HALLER_HEIGHT_UNITS.map(
+  (u) => Math.round(u * GRID_UNIT_MM)
+);
+export const HALLER_DEPTH_MM = HALLER_DEPTH_UNITS.map(
+  (u) => Math.round(u * GRID_UNIT_MM)
+);
+
+/** 하단 받침대 타입 */
+export const BASE_TYPES = [
+  { id: "glide", label: "글라이드 (고정발)" },
+  { id: "caster", label: "캐스터 (바퀴)" },
+  { id: "leveler", label: "레벨러 (높이조절)" },
+  { id: "none", label: "없음" },
+];
+
+/** 받침대 타입별 참고 추가 단가 (원, 하단 모듈 1개당) */
+export const REFERENCE_PRICE_BASE_TYPE_ADDITION = {
+  glide: 0,
+  caster: 15000,
+  leveler: 10000,
+  none: 0,
+};
 
 /** 앞면(액세서리) 타입: 오픈 / 도어 / 서랍 / 글라스 */
 export const FRONT_TYPES = [

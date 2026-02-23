@@ -1,10 +1,1185 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 import * as BABYLON from "babylonjs";
 import "@babylonjs/loaders";
-import { HALLER_GLTF_BASE_URL } from "../data/hallerConfig";
+import {
+  GRID_UNIT_MM,
+  HALLER_GLTF_BASE_URL,
+  HALLER_GLTF_MODELS,
+} from "../data/hallerConfig";
 
-/** Phase B: true로 전환 시 glTF 로드 파이프라인 사용. 자산은 HALLER_GLTF_BASE_URL + frontType별 경로. */
 const USE_GLTF_MODELS = false;
+
+const TUBE_RADIUS = 0.022;
+const TUBE_SEG = 10;
+const BALL_RADIUS = 0.035;
+const BALL_SEG = 8;
+const PANEL_THICK = 0.008;
+const PANEL_INSET = 0.04;
+const HANDLE_R = 0.006;
+const HANDLE_LEN = 0.12;
+const HANDLE_OFF = 0.018;
+
+function safeColor(hex) {
+  try {
+    return BABYLON.Color3.FromHexString(hex);
+  } catch {
+    return new BABYLON.Color3(1, 1, 1);
+  }
+}
+
+function isMaterialAlive(mat) {
+  if (!mat) return false;
+  if (typeof mat.isDisposed === "function") {
+    return !mat.isDisposed();
+  }
+  return !mat._isDisposed;
+}
+
+function getChromeMat(scene) {
+  if (isMaterialAlive(scene._hChrome)) {
+    return scene._hChrome;
+  }
+  const m = new BABYLON.StandardMaterial("hChrome", scene);
+  m.diffuseColor = new BABYLON.Color3(0.82, 0.82, 0.80);
+  m.specularColor = new BABYLON.Color3(0.95, 0.95, 0.92);
+  m.specularPower = 64;
+  scene._hChrome = m;
+  return m;
+}
+
+function getGlideMat(scene) {
+  if (isMaterialAlive(scene._hGlide)) {
+    return scene._hGlide;
+  }
+  const m = new BABYLON.StandardMaterial("hGlide", scene);
+  m.diffuseColor = new BABYLON.Color3(0.08, 0.08, 0.08);
+  m.specularColor = new BABYLON.Color3(0.15, 0.15, 0.15);
+  m.specularPower = 16;
+  scene._hGlide = m;
+  return m;
+}
+
+function getRubberMat(scene) {
+  if (isMaterialAlive(scene._hRubber)) {
+    return scene._hRubber;
+  }
+  const m = new BABYLON.StandardMaterial("hRubber", scene);
+  m.diffuseColor = new BABYLON.Color3(0.06, 0.06, 0.06);
+  m.specularColor = new BABYLON.Color3(0.04, 0.04, 0.04);
+  m.specularPower = 4;
+  scene._hRubber = m;
+  return m;
+}
+
+function getHandleMat(scene) {
+  if (isMaterialAlive(scene._hHandle)) {
+    return scene._hHandle;
+  }
+  const m = new BABYLON.StandardMaterial("hHandle", scene);
+  m.diffuseColor = new BABYLON.Color3(0.78, 0.78, 0.76);
+  m.specularColor = new BABYLON.Color3(0.9, 0.9, 0.88);
+  m.specularPower = 48;
+  scene._hHandle = m;
+  return m;
+}
+
+function makePanelMat(scene, name, hex, glass = false) {
+  const m = new BABYLON.StandardMaterial(name, scene);
+  m.diffuseColor = safeColor(hex);
+  if (glass) {
+    m.specularColor = new BABYLON.Color3(0.6, 0.6, 0.6);
+    m.specularPower = 96;
+    m.alpha = 0.3;
+    m.backFaceCulling = false;
+  } else {
+    m.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3);
+    m.specularPower = 32;
+  }
+  m._isPerModule = true;
+  return m;
+}
+
+// ── Geometry: Aligned Cylinder ──────────────────────────────
+
+function makeTube(scene, from, to, radius) {
+  const d = BABYLON.Vector3.Distance(from, to);
+  if (d < 0.001) return null;
+  const c = BABYLON.MeshBuilder.CreateCylinder(
+    "_t",
+    {
+      height: d,
+      diameter: radius * 2,
+      tessellation: TUBE_SEG,
+    },
+    scene
+  );
+  c.position = BABYLON.Vector3.Center(from, to);
+  const dir = to.subtract(from).normalize();
+  const up = BABYLON.Vector3.Up();
+  const dot = BABYLON.Vector3.Dot(up, dir);
+  if (Math.abs(dot) < 0.9999) {
+    const ax = BABYLON.Vector3.Cross(up, dir).normalize();
+    const ang = Math.acos(Math.min(1, Math.max(-1, dot)));
+    c.rotationQuaternion = BABYLON.Quaternion.RotationAxis(
+      ax,
+      ang
+    );
+  } else if (dot < 0) {
+    c.rotation.z = Math.PI;
+  }
+  return c;
+}
+
+// ── Geometry: Chrome Frame (12 tubes + 8 ball connectors) ───
+
+function buildHallerFrame(scene, node, id, hw, hh, hd, sg) {
+  const corners = [
+    new BABYLON.Vector3(-hw, -hh, -hd),
+    new BABYLON.Vector3(hw, -hh, -hd),
+    new BABYLON.Vector3(hw, hh, -hd),
+    new BABYLON.Vector3(-hw, hh, -hd),
+    new BABYLON.Vector3(-hw, -hh, hd),
+    new BABYLON.Vector3(hw, -hh, hd),
+    new BABYLON.Vector3(hw, hh, hd),
+    new BABYLON.Vector3(-hw, hh, hd),
+  ];
+  const edges = [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 0],
+    [4, 5],
+    [5, 6],
+    [6, 7],
+    [7, 4],
+    [0, 4],
+    [1, 5],
+    [2, 6],
+    [3, 7],
+  ];
+
+  const parts = [];
+
+  corners.forEach((pos) => {
+    const b = BABYLON.MeshBuilder.CreateSphere(
+      "_b",
+      { diameter: BALL_RADIUS * 2, segments: BALL_SEG },
+      scene
+    );
+    b.position = pos;
+    parts.push(b);
+  });
+
+  edges.forEach(([a, b]) => {
+    const t = makeTube(
+      scene,
+      corners[a],
+      corners[b],
+      TUBE_RADIUS
+    );
+    if (t) parts.push(t);
+  });
+
+  if (parts.length === 0) return;
+  const merged = BABYLON.Mesh.MergeMeshes(
+    parts,
+    true,
+    true,
+    undefined,
+    false,
+    true
+  );
+  if (!merged) return;
+  merged.name = `frame-${id}`;
+  merged.material = getChromeMat(scene);
+  merged.parent = node;
+  merged.metadata = { meshType: "chrome" };
+  if (sg) sg.addShadowCaster(merged);
+}
+
+// ── Geometry: 5-face Colored Panels ─────────────────────────
+
+function buildHallerPanels(
+  scene,
+  node,
+  id,
+  hw,
+  hh,
+  hd,
+  color,
+  sg
+) {
+  const ins = PANEL_INSET;
+  const pw = hw - ins;
+  const ph = hh - ins;
+  const pd = hd - ins;
+  const t = PANEL_THICK;
+
+  const defs = [
+    {
+      w: pw * 2,
+      h: ph * 2,
+      d: t,
+      x: 0,
+      y: 0,
+      z: -hd + t / 2,
+    },
+    {
+      w: pw * 2,
+      h: t,
+      d: pd * 2,
+      x: 0,
+      y: -hh + t / 2,
+      z: 0,
+    },
+    {
+      w: pw * 2,
+      h: t,
+      d: pd * 2,
+      x: 0,
+      y: hh - t / 2,
+      z: 0,
+    },
+    {
+      w: t,
+      h: ph * 2,
+      d: pd * 2,
+      x: -hw + t / 2,
+      y: 0,
+      z: 0,
+    },
+    {
+      w: t,
+      h: ph * 2,
+      d: pd * 2,
+      x: hw - t / 2,
+      y: 0,
+      z: 0,
+    },
+  ];
+
+  const parts = defs.map((p) => {
+    const bx = BABYLON.MeshBuilder.CreateBox(
+      "_p",
+      { width: p.w, height: p.h, depth: p.d },
+      scene
+    );
+    bx.position = new BABYLON.Vector3(p.x, p.y, p.z);
+    return bx;
+  });
+
+  const merged = BABYLON.Mesh.MergeMeshes(
+    parts,
+    true,
+    true,
+    undefined,
+    false,
+    true
+  );
+  if (!merged) return;
+  merged.name = `panels-${id}`;
+  merged.material = makePanelMat(
+    scene,
+    `panelMat-${id}`,
+    color
+  );
+  merged.parent = node;
+  merged.metadata = { meshType: "panel" };
+  if (sg) sg.addShadowCaster(merged);
+}
+
+// ── Geometry: Front Face (door / drawer / glass) ────────────
+
+function buildHallerFront(
+  scene,
+  node,
+  id,
+  hw,
+  hh,
+  hd,
+  frontType,
+  color,
+  sg
+) {
+  if (frontType === "open") return;
+
+  const ins = PANEL_INSET;
+  const pw = hw - ins;
+  const ph = hh - ins;
+  const isGlass = frontType === "glass";
+
+  const panel = BABYLON.MeshBuilder.CreateBox(
+    `front-${id}`,
+    { width: pw * 2, height: ph * 2, depth: PANEL_THICK },
+    scene
+  );
+  panel.position = new BABYLON.Vector3(
+    0,
+    0,
+    hd - PANEL_THICK / 2
+  );
+  panel.material = makePanelMat(
+    scene,
+    `frontMat-${id}`,
+    color,
+    isGlass
+  );
+  panel.parent = node;
+  panel.metadata = { meshType: "front" };
+  if (sg) sg.addShadowCaster(panel);
+
+  if (isGlass) return;
+
+  const hMat = getHandleMat(scene);
+
+  if (frontType === "door") {
+    const bar = BABYLON.MeshBuilder.CreateCylinder(
+      `hdl-${id}`,
+      {
+        height: HANDLE_LEN,
+        diameter: HANDLE_R * 2,
+        tessellation: 8,
+      },
+      scene
+    );
+    bar.rotation.z = Math.PI / 2;
+    const hx = pw - HANDLE_LEN / 2 - 0.02;
+    bar.position = new BABYLON.Vector3(
+      hx,
+      0,
+      hd + HANDLE_OFF
+    );
+    bar.material = hMat;
+    bar.parent = node;
+    bar.metadata = { meshType: "handle" };
+
+    const gap = HANDLE_LEN - 0.03;
+    [-gap / 2, gap / 2].forEach((dx, i) => {
+      const br = BABYLON.MeshBuilder.CreateCylinder(
+        `hBr-${id}-${i}`,
+        {
+          height: HANDLE_OFF,
+          diameter: HANDLE_R * 1.4,
+          tessellation: 6,
+        },
+        scene
+      );
+      br.rotation.x = Math.PI / 2;
+      br.position = new BABYLON.Vector3(
+        hx + dx,
+        0,
+        hd + HANDLE_OFF / 2
+      );
+      br.material = hMat;
+      br.parent = node;
+      br.metadata = { meshType: "handle" };
+    });
+    return;
+  }
+
+  if (frontType === "drawer") {
+    const pullW = pw * 1.2;
+    const pullY = -ph * 0.35;
+
+    const pull = BABYLON.MeshBuilder.CreateCylinder(
+      `hdl-${id}`,
+      {
+        height: pullW,
+        diameter: HANDLE_R * 2.5,
+        tessellation: 8,
+      },
+      scene
+    );
+    pull.rotation.z = Math.PI / 2;
+    pull.position = new BABYLON.Vector3(
+      0,
+      pullY,
+      hd + HANDLE_OFF
+    );
+    pull.material = hMat;
+    pull.parent = node;
+    pull.metadata = { meshType: "handle" };
+
+    [-pullW / 2, pullW / 2].forEach((dx, i) => {
+      const br = BABYLON.MeshBuilder.CreateCylinder(
+        `pBr-${id}-${i}`,
+        {
+          height: HANDLE_OFF,
+          diameter: HANDLE_R * 1.4,
+          tessellation: 6,
+        },
+        scene
+      );
+      br.rotation.x = Math.PI / 2;
+      br.position = new BABYLON.Vector3(
+        dx,
+        pullY,
+        hd + HANDLE_OFF / 2
+      );
+      br.material = hMat;
+      br.parent = node;
+      br.metadata = { meshType: "handle" };
+    });
+  }
+}
+
+// ── Geometry: Glide Feet (4 corners) ────────────────────────
+// USM spec: chrome cone glide with felt pad
+
+const GLD_STEM_R = 0.01;
+const GLD_STEM_H = 0.02;
+const GLD_CONE_TOP_R = 0.012;
+const GLD_CONE_BOT_R = 0.032;
+const GLD_CONE_H = 0.06;
+const GLD_PAD_R = 0.032;
+const GLD_PAD_H = 0.006;
+
+function buildHallerGlides(scene, node, id, hw, hh, hd) {
+  const positions = [
+    [-hw, -hh, -hd],
+    [hw, -hh, -hd],
+    [-hw, -hh, hd],
+    [hw, -hh, hd],
+  ];
+
+  const chrome = getChromeMat(scene);
+  const rubber = getRubberMat(scene);
+
+  positions.forEach(([x, y, z], i) => {
+    let cy = y;
+
+    const stem = BABYLON.MeshBuilder.CreateCylinder(
+      `gs-${id}-${i}`,
+      {
+        height: GLD_STEM_H,
+        diameter: GLD_STEM_R * 2,
+        tessellation: 8,
+      },
+      scene
+    );
+    cy -= GLD_STEM_H / 2;
+    stem.position = new BABYLON.Vector3(x, cy, z);
+    stem.material = chrome;
+    stem.parent = node;
+    stem.metadata = { meshType: "glide" };
+    cy -= GLD_STEM_H / 2;
+
+    const cone = BABYLON.MeshBuilder.CreateCylinder(
+      `gc-${id}-${i}`,
+      {
+        height: GLD_CONE_H,
+        diameterTop: GLD_CONE_TOP_R * 2,
+        diameterBottom: GLD_CONE_BOT_R * 2,
+        tessellation: 14,
+      },
+      scene
+    );
+    cy -= GLD_CONE_H / 2;
+    cone.position = new BABYLON.Vector3(x, cy, z);
+    cone.material = chrome;
+    cone.parent = node;
+    cone.metadata = { meshType: "glide" };
+    cy -= GLD_CONE_H / 2;
+
+    const pad = BABYLON.MeshBuilder.CreateCylinder(
+      `gp-${id}-${i}`,
+      {
+        height: GLD_PAD_H,
+        diameter: GLD_PAD_R * 2,
+        tessellation: 14,
+      },
+      scene
+    );
+    cy -= GLD_PAD_H / 2;
+    pad.position = new BABYLON.Vector3(x, cy, z);
+    pad.material = rubber;
+    pad.parent = node;
+    pad.metadata = { meshType: "glide" };
+  });
+}
+
+// ── Geometry: Caster Wheels (4 corners) ─────────────────────
+
+const CASTER_GLB_URL = "/models/haller/caster.glb";
+let casterContainer = null;
+let casterLoadFailed = false;
+
+function buildHallerCasters(scene, node, id, hw, hh, hd) {
+  const positions = [
+    [-hw, -hh, -hd],
+    [hw, -hh, -hd],
+    [-hw, -hh, hd],
+    [hw, -hh, hd],
+  ];
+
+  if (casterLoadFailed) {
+    buildHallerCastersFallback(scene, node, id, positions);
+    return;
+  }
+
+  const place = (container) => {
+    positions.forEach(([x, y, z], i) => {
+      const inst = container.instantiateModelsToScene(
+        (name) => `${name}-${id}-${i}`
+      );
+      const root = inst.rootNodes[0];
+      if (!root) return;
+      root.position = new BABYLON.Vector3(x, y, z);
+      root.parent = node;
+      root.metadata = { meshType: "caster" };
+      root.getChildMeshes().forEach((m) => {
+        m.metadata = { meshType: "caster" };
+      });
+    });
+  };
+
+  if (casterContainer) {
+    place(casterContainer);
+    return;
+  }
+
+  BABYLON.SceneLoader.LoadAssetContainerAsync(
+    "",
+    CASTER_GLB_URL,
+    scene
+  )
+    .then((container) => {
+      casterContainer = container;
+      place(container);
+    })
+    .catch(() => {
+      casterLoadFailed = true;
+      buildHallerCastersFallback(
+        scene, node, id, positions
+      );
+    });
+}
+
+function buildHallerCastersFallback(
+  scene, node, id, positions
+) {
+  const chrome = getChromeMat(scene);
+  const rubber = getRubberMat(scene);
+
+  const MOUNT_R = 0.025;
+  const MOUNT_H = 0.01;
+  const AXLE_R = 0.01;
+  const AXLE_H = 0.02;
+  const FORK_R = 0.006;
+  const FORK_H = 0.05;
+  const FORK_SPREAD = 0.022;
+  const WHEEL_R = 0.06;
+  const WHEEL_W = 0.02;
+
+  positions.forEach(([x, y, z], i) => {
+    let cy = y;
+
+    const mount = BABYLON.MeshBuilder.CreateCylinder(
+      `cm-${id}-${i}`,
+      { height: MOUNT_H, diameter: MOUNT_R * 2, tessellation: 16 },
+      scene
+    );
+    cy -= MOUNT_H / 2;
+    mount.position = new BABYLON.Vector3(x, cy, z);
+    mount.material = chrome;
+    mount.parent = node;
+    mount.metadata = { meshType: "caster" };
+    cy -= MOUNT_H / 2;
+
+    const axle = BABYLON.MeshBuilder.CreateCylinder(
+      `ca-${id}-${i}`,
+      { height: AXLE_H, diameter: AXLE_R * 2, tessellation: 10 },
+      scene
+    );
+    cy -= AXLE_H / 2;
+    axle.position = new BABYLON.Vector3(x, cy, z);
+    axle.material = chrome;
+    axle.parent = node;
+    axle.metadata = { meshType: "caster" };
+    cy -= AXLE_H / 2;
+
+    const forkL = BABYLON.MeshBuilder.CreateCylinder(
+      `cfl-${id}-${i}`,
+      { height: FORK_H, diameter: FORK_R * 2, tessellation: 8 },
+      scene
+    );
+    forkL.position = new BABYLON.Vector3(
+      x, cy - FORK_H / 2, z - FORK_SPREAD
+    );
+    forkL.material = chrome;
+    forkL.parent = node;
+    forkL.metadata = { meshType: "caster" };
+
+    const forkR = BABYLON.MeshBuilder.CreateCylinder(
+      `cfr-${id}-${i}`,
+      { height: FORK_H, diameter: FORK_R * 2, tessellation: 8 },
+      scene
+    );
+    forkR.position = new BABYLON.Vector3(
+      x, cy - FORK_H / 2, z + FORK_SPREAD
+    );
+    forkR.material = chrome;
+    forkR.parent = node;
+    forkR.metadata = { meshType: "caster" };
+
+    const bridge = BABYLON.MeshBuilder.CreateCylinder(
+      `cfb-${id}-${i}`,
+      { height: FORK_SPREAD * 2, diameter: FORK_R * 2, tessellation: 8 },
+      scene
+    );
+    bridge.rotation.x = Math.PI / 2;
+    bridge.position = new BABYLON.Vector3(
+      x, cy - FORK_H, z
+    );
+    bridge.material = chrome;
+    bridge.parent = node;
+    bridge.metadata = { meshType: "caster" };
+
+    const wCenter = cy - FORK_H + WHEEL_R * 0.15;
+    const wheel = BABYLON.MeshBuilder.CreateCylinder(
+      `cw-${id}-${i}`,
+      { height: WHEEL_W, diameter: WHEEL_R * 2, tessellation: 24 },
+      scene
+    );
+    wheel.rotation.x = Math.PI / 2;
+    wheel.position = new BABYLON.Vector3(x, wCenter, z);
+    wheel.material = rubber;
+    wheel.parent = node;
+    wheel.metadata = { meshType: "caster" };
+
+    const hub = BABYLON.MeshBuilder.CreateCylinder(
+      `cwh-${id}-${i}`,
+      { height: WHEEL_W + 0.002, diameter: WHEEL_R * 0.7, tessellation: 12 },
+      scene
+    );
+    hub.rotation.x = Math.PI / 2;
+    hub.position = new BABYLON.Vector3(x, wCenter, z);
+    hub.material = chrome;
+    hub.parent = node;
+    hub.metadata = { meshType: "caster" };
+  });
+}
+
+// ── Geometry: Leveler Feet (4 corners) ──────────────────────
+// USM spec: adjustable height leveler with hex nut
+
+const LVL_CAP_R = 0.016;
+const LVL_CAP_H = 0.014;
+const LVL_STEM_R = 0.008;
+const LVL_STEM_H = 0.06;
+const LVL_NUT_R = 0.016;
+const LVL_NUT_H = 0.018;
+const LVL_PAD_R = 0.028;
+const LVL_PAD_H = 0.008;
+
+function buildHallerLevelers(
+  scene,
+  node,
+  id,
+  hw,
+  hh,
+  hd
+) {
+  const positions = [
+    [-hw, -hh, -hd],
+    [hw, -hh, -hd],
+    [-hw, -hh, hd],
+    [hw, -hh, hd],
+  ];
+
+  const chrome = getChromeMat(scene);
+  const rubber = getRubberMat(scene);
+
+  positions.forEach(([x, y, z], i) => {
+    let cy = y;
+
+    const cap = BABYLON.MeshBuilder.CreateCylinder(
+      `lc-${id}-${i}`,
+      {
+        height: LVL_CAP_H,
+        diameterTop: LVL_CAP_R * 1.6,
+        diameterBottom: LVL_CAP_R * 2,
+        tessellation: 12,
+      },
+      scene
+    );
+    cy -= LVL_CAP_H / 2;
+    cap.position = new BABYLON.Vector3(x, cy, z);
+    cap.material = chrome;
+    cap.parent = node;
+    cap.metadata = { meshType: "leveler" };
+    cy -= LVL_CAP_H / 2;
+
+    const stem = BABYLON.MeshBuilder.CreateCylinder(
+      `ls-${id}-${i}`,
+      {
+        height: LVL_STEM_H,
+        diameter: LVL_STEM_R * 2,
+        tessellation: 10,
+      },
+      scene
+    );
+    cy -= LVL_STEM_H / 2;
+    stem.position = new BABYLON.Vector3(x, cy, z);
+    stem.material = chrome;
+    stem.parent = node;
+    stem.metadata = { meshType: "leveler" };
+    cy -= LVL_STEM_H / 2;
+
+    const nutY = y - LVL_CAP_H - LVL_STEM_H * 0.45;
+    const nut = BABYLON.MeshBuilder.CreateCylinder(
+      `ln-${id}-${i}`,
+      {
+        height: LVL_NUT_H,
+        diameter: LVL_NUT_R * 2,
+        tessellation: 6,
+      },
+      scene
+    );
+    nut.position = new BABYLON.Vector3(x, nutY, z);
+    nut.material = chrome;
+    nut.parent = node;
+    nut.metadata = { meshType: "leveler" };
+
+    const pad = BABYLON.MeshBuilder.CreateCylinder(
+      `lp-${id}-${i}`,
+      {
+        height: LVL_PAD_H,
+        diameter: LVL_PAD_R * 2,
+        tessellation: 16,
+      },
+      scene
+    );
+    pad.position = new BABYLON.Vector3(x, cy - LVL_PAD_H / 2, z);
+    pad.material = rubber;
+    pad.parent = node;
+    pad.metadata = { meshType: "leveler" };
+  });
+}
+
+// ── glTF Loading Pipeline (Phase B-3) ───────────────────────
+
+const gltfCache = new Map();
+
+async function tryLoadGltf(
+  scene,
+  node,
+  id,
+  frontType,
+  color,
+  hw,
+  hh,
+  hd
+) {
+  if (!USE_GLTF_MODELS || !HALLER_GLTF_BASE_URL) return false;
+
+  const modelMap = HALLER_GLTF_MODELS || {};
+  const modelFile = modelMap[frontType] || modelMap.frame;
+  if (!modelFile) return false;
+
+  const url = `${HALLER_GLTF_BASE_URL}${modelFile}`;
+
+  try {
+    let container = gltfCache.get(url);
+    if (!container) {
+      container =
+        await BABYLON.SceneLoader.LoadAssetContainerAsync(
+          "",
+          url,
+          scene
+        );
+      gltfCache.set(url, container);
+    }
+
+    const entries = container.instantiateModelsToScene(
+      (name) => `${name}-${id}`
+    );
+    const root = entries.rootNodes[0];
+    if (!root) return false;
+
+    root.scaling = new BABYLON.Vector3(
+      hw * 2,
+      hh * 2,
+      hd * 2
+    );
+    root.parent = node;
+    root.metadata = { meshType: "gltfRoot" };
+
+    root.getChildMeshes().forEach((mesh) => {
+      if (
+        mesh.material instanceof BABYLON.StandardMaterial
+      ) {
+        mesh.material.diffuseColor = safeColor(color);
+      }
+    });
+
+    return true;
+  } catch (err) {
+    console.warn("glTF load failed, using procedural:", err);
+    return false;
+  }
+}
+
+// ── Orchestrator ────────────────────────────────────────────
+
+function disposeChildren(node) {
+  node.getChildren().forEach((c) => {
+    if (
+      c instanceof BABYLON.Mesh &&
+      c.material?._isPerModule
+    ) {
+      c.material.dispose();
+    }
+    if (c instanceof BABYLON.TransformNode) {
+      disposeChildren(c);
+    }
+    c.dispose();
+  });
+}
+
+function buildModuleMeshes(
+  scene,
+  node,
+  id,
+  frontType,
+  color,
+  isSelected,
+  sg,
+  w,
+  h,
+  d,
+  isBottom,
+  baseType
+) {
+  disposeChildren(node);
+
+  const hw = w / 2;
+  const hh = h / 2;
+  const hd = d / 2;
+
+  buildHallerFrame(scene, node, id, hw, hh, hd, sg);
+  buildHallerPanels(
+    scene,
+    node,
+    id,
+    hw,
+    hh,
+    hd,
+    color,
+    sg
+  );
+  buildHallerFront(
+    scene,
+    node,
+    id,
+    hw,
+    hh,
+    hd,
+    frontType,
+    color,
+    sg
+  );
+  if (isBottom) {
+    const bt = baseType || "glide";
+    if (bt === "glide") {
+      buildHallerGlides(scene, node, id, hw, hh, hd);
+    } else if (bt === "caster") {
+      buildHallerCasters(scene, node, id, hw, hh, hd);
+    } else if (bt === "leveler") {
+      buildHallerLevelers(scene, node, id, hw, hh, hd);
+    }
+  }
+
+  applySelection(node, isSelected);
+
+  if (USE_GLTF_MODELS && HALLER_GLTF_BASE_URL) {
+    tryLoadGltf(
+      scene,
+      node,
+      id,
+      frontType,
+      color,
+      hw,
+      hh,
+      hd
+    ).then((ok) => {
+      if (ok) {
+        node.getChildren().forEach((c) => {
+          if (c.metadata?.meshType !== "gltfRoot") {
+            if (c.material?._isPerModule) {
+              c.material.dispose();
+            }
+            c.dispose();
+          }
+        });
+      }
+    });
+  }
+}
+
+function applySelection(node, isSelected) {
+  const emC = isSelected
+    ? new BABYLON.Color3(0.98, 0.75, 0.14)
+    : BABYLON.Color3.Black();
+
+  node.getChildren().forEach((c) => {
+    if (!(c instanceof BABYLON.Mesh)) return;
+    const t = c.metadata?.meshType;
+    if (
+      (t === "panel" || t === "front") &&
+      c.material instanceof BABYLON.StandardMaterial
+    ) {
+      c.material.emissiveColor = emC;
+    }
+  });
+}
+
+function updateColors(node, color, frontType, isSelected) {
+  node.getChildren().forEach((c) => {
+    if (!(c instanceof BABYLON.Mesh)) return;
+    const t = c.metadata?.meshType;
+    if (
+      (t === "panel" || t === "front") &&
+      c.material instanceof BABYLON.StandardMaterial
+    ) {
+      c.material.diffuseColor = safeColor(color);
+      if (t === "front" && frontType === "glass") {
+        c.material.alpha = 0.3;
+      }
+    }
+  });
+  applySelection(node, isSelected);
+}
+
+// ── Dimension Lines ─────────────────────────────────────────
+
+const DIM_COLOR = new BABYLON.Color3(0.1, 0.1, 0.1);
+const DIM_OFFSET = 0.18;
+const DIM_TICK_LEN = 0.06;
+const DIM_TAG = "dimensionHelper";
+
+function disposeDimensionHelpers(scene) {
+  scene.meshes
+    .filter((m) => m.metadata?.tag === DIM_TAG)
+    .forEach((m) => {
+      if (m.material) m.material.dispose();
+      m.dispose();
+    });
+}
+
+function makeLabel(scene, text, pos, size = 0.2) {
+  const texW = 512;
+  const texH = 160;
+  const dt = new BABYLON.DynamicTexture(
+    `dtDim-${text}`,
+    { width: texW, height: texH },
+    scene,
+    false
+  );
+  const ctx = dt.getContext();
+  ctx.clearRect(0, 0, texW, texH);
+
+  const pad = 12;
+  const rr = 16;
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.strokeStyle = "#333333";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(pad, pad, texW - pad * 2, texH - pad * 2, rr);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#111111";
+  ctx.font = "bold 72px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, texW / 2, texH / 2);
+  dt.update();
+
+  const ratio = texW / texH;
+  const plane = BABYLON.MeshBuilder.CreatePlane(
+    `dimLbl-${text}`,
+    { width: size * ratio, height: size },
+    scene
+  );
+  const mat = new BABYLON.StandardMaterial(
+    `dimLblM-${text}`,
+    scene
+  );
+  mat.diffuseTexture = dt;
+  mat.diffuseTexture.hasAlpha = true;
+  mat.specularColor = BABYLON.Color3.Black();
+  mat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+  mat.useAlphaFromDiffuseTexture = true;
+  mat.backFaceCulling = false;
+  plane.material = mat;
+  plane.position = pos;
+  plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+  plane.metadata = { tag: DIM_TAG };
+  return plane;
+}
+
+function makeDimLine(scene, points) {
+  const line = BABYLON.MeshBuilder.CreateLines(
+    "dimLine",
+    {
+      points,
+      updatable: false,
+    },
+    scene
+  );
+  line.color = DIM_COLOR;
+  line.metadata = { tag: DIM_TAG };
+  return line;
+}
+
+function buildDimensionLines(
+  scene, modules, maxW, maxH, maxD, baseHeight
+) {
+  disposeDimensionHelpers(scene);
+  if (!modules || modules.length === 0) return;
+
+  const bh = baseHeight || 0;
+  const clampDim = (v) =>
+    Number.isFinite(v) ? Math.max(v, 0.1) : 1;
+
+  let bMinX = Infinity,
+    bMaxX = -Infinity;
+  let bMinY = Infinity,
+    bMaxY = -Infinity;
+  let bMinZ = Infinity,
+    bMaxZ = -Infinity;
+
+  modules.forEach((mod) => {
+    const w = clampDim(mod.width);
+    const h = clampDim(mod.height);
+    const d = clampDim(mod.depth);
+    const gx = mod.gridX || 0;
+    const gy = mod.gridY || 0;
+    const gz = mod.gridZ || 0;
+
+    const cx = gx * maxW;
+    const cy = h / 2 + gy * maxH + bh;
+    const cz = gz * maxD;
+
+    bMinX = Math.min(bMinX, cx - w / 2);
+    bMaxX = Math.max(bMaxX, cx + w / 2);
+    bMinY = Math.min(bMinY, cy - h / 2);
+    bMaxY = Math.max(bMaxY, cy + h / 2);
+    bMinZ = Math.min(bMinZ, cz - d / 2);
+    bMaxZ = Math.max(bMaxZ, cz + d / 2);
+  });
+
+  const widthMM = Math.round(
+    (bMaxX - bMinX) * GRID_UNIT_MM
+  );
+  const heightMM = Math.round(
+    (bMaxY - bMinY) * GRID_UNIT_MM
+  );
+  const depthMM = Math.round(
+    (bMaxZ - bMinZ) * GRID_UNIT_MM
+  );
+
+  const topY = bMaxY + DIM_OFFSET;
+  makeDimLine(scene, [
+    new BABYLON.Vector3(bMinX, topY, bMinZ),
+    new BABYLON.Vector3(bMaxX, topY, bMinZ),
+  ]);
+  makeDimLine(scene, [
+    new BABYLON.Vector3(bMinX, topY - DIM_TICK_LEN, bMinZ),
+    new BABYLON.Vector3(bMinX, topY + DIM_TICK_LEN, bMinZ),
+  ]);
+  makeDimLine(scene, [
+    new BABYLON.Vector3(bMaxX, topY - DIM_TICK_LEN, bMinZ),
+    new BABYLON.Vector3(bMaxX, topY + DIM_TICK_LEN, bMinZ),
+  ]);
+  makeLabel(
+    scene,
+    `${widthMM}mm`,
+    new BABYLON.Vector3(
+      (bMinX + bMaxX) / 2,
+      topY + DIM_OFFSET * 0.8,
+      bMinZ
+    )
+  );
+
+  const rightX = bMaxX + DIM_OFFSET;
+  makeDimLine(scene, [
+    new BABYLON.Vector3(rightX, bMinY, bMinZ),
+    new BABYLON.Vector3(rightX, bMaxY, bMinZ),
+  ]);
+  makeDimLine(scene, [
+    new BABYLON.Vector3(
+      rightX - DIM_TICK_LEN,
+      bMinY,
+      bMinZ
+    ),
+    new BABYLON.Vector3(
+      rightX + DIM_TICK_LEN,
+      bMinY,
+      bMinZ
+    ),
+  ]);
+  makeDimLine(scene, [
+    new BABYLON.Vector3(
+      rightX - DIM_TICK_LEN,
+      bMaxY,
+      bMinZ
+    ),
+    new BABYLON.Vector3(
+      rightX + DIM_TICK_LEN,
+      bMaxY,
+      bMinZ
+    ),
+  ]);
+  makeLabel(
+    scene,
+    `${heightMM}mm`,
+    new BABYLON.Vector3(
+      rightX + DIM_OFFSET * 0.8,
+      (bMinY + bMaxY) / 2,
+      bMinZ
+    )
+  );
+
+  const frontZ = bMinZ - DIM_OFFSET;
+  makeDimLine(scene, [
+    new BABYLON.Vector3(bMinX, bMinY, bMinZ),
+    new BABYLON.Vector3(bMinX, bMinY, bMaxZ),
+  ]);
+  makeDimLine(scene, [
+    new BABYLON.Vector3(bMinX, bMinY, bMinZ),
+    new BABYLON.Vector3(
+      bMinX - DIM_TICK_LEN,
+      bMinY,
+      bMinZ
+    ),
+  ]);
+  makeDimLine(scene, [
+    new BABYLON.Vector3(bMinX, bMinY, bMaxZ),
+    new BABYLON.Vector3(
+      bMinX - DIM_TICK_LEN,
+      bMinY,
+      bMaxZ
+    ),
+  ]);
+  makeLabel(
+    scene,
+    `${depthMM}mm`,
+    new BABYLON.Vector3(
+      bMinX - DIM_OFFSET * 1.2,
+      bMinY,
+      (bMinZ + bMaxZ) / 2
+    )
+  );
+}
+
+// ── Component ───────────────────────────────────────────────
 
 const Haller3DCanvas = forwardRef(function Haller3DCanvas(
   { configuration, selectedModuleId, onSelectModule },
@@ -13,8 +1188,8 @@ const Haller3DCanvas = forwardRef(function Haller3DCanvas(
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const sceneRef = useRef(null);
-  const shadowGeneratorRef = useRef(null);
-  const moduleNodesRef = useRef(new Map());
+  const sgRef = useRef(null);
+  const nodesRef = useRef(new Map());
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,256 +1202,177 @@ const Haller3DCanvas = forwardRef(function Haller3DCanvas(
     engineRef.current = engine;
 
     const scene = new BABYLON.Scene(engine);
-    scene.clearColor = new BABYLON.Color4(0.06, 0.06, 0.06, 1);
+    scene.clearColor = new BABYLON.Color4(
+      0.94, 0.94, 0.94, 1
+    );
     sceneRef.current = scene;
 
     const camera = new BABYLON.ArcRotateCamera(
-      "camera",
+      "cam",
       Math.PI / 3,
-      Math.PI / 3,
-      14,
-      new BABYLON.Vector3(0, 2, 0),
+      Math.PI / 3.2,
+      5,
+      new BABYLON.Vector3(0, 0.8, 0),
       scene
     );
-    camera.lowerRadiusLimit = 6;
-    camera.upperRadiusLimit = 30;
+    camera.lowerRadiusLimit = 2;
+    camera.upperRadiusLimit = 35;
     camera.wheelDeltaPercentage = 0.01;
     camera.panningSensibility = 2000;
+    camera.minZ = 0.1;
     camera.attachControl(canvas, true);
 
-    const hemiLight = new BABYLON.HemisphericLight(
-      "hemiLight",
+    const hemi = new BABYLON.HemisphericLight(
+      "hemi",
       new BABYLON.Vector3(0, 1, 0),
       scene
     );
-    hemiLight.intensity = 0.6;
+    hemi.intensity = 0.7;
+    hemi.groundColor = new BABYLON.Color3(0.4, 0.4, 0.4);
 
-    const dirLight = new BABYLON.DirectionalLight(
-      "dirLight",
-      new BABYLON.Vector3(-0.5, -1, -0.5),
+    const dir = new BABYLON.DirectionalLight(
+      "dir",
+      new BABYLON.Vector3(-0.4, -1, -0.3),
       scene
     );
-    dirLight.position = new BABYLON.Vector3(6, 10, 6);
-    dirLight.intensity = 0.9;
+    dir.position = new BABYLON.Vector3(6, 12, 8);
+    dir.intensity = 0.6;
 
-    const shadowGenerator = new BABYLON.ShadowGenerator(1024, dirLight);
-    shadowGenerator.usePoissonSampling = true;
-    shadowGeneratorRef.current = shadowGenerator;
+    const sg = new BABYLON.ShadowGenerator(2048, dir);
+    sg.usePercentageCloserFiltering = true;
+    sg.filteringQuality =
+      BABYLON.ShadowGenerator.QUALITY_MEDIUM;
+    sg.bias = 0.001;
+    sg.normalBias = 0.02;
+    sgRef.current = sg;
 
     const ground = BABYLON.MeshBuilder.CreateGround(
       "ground",
-      { width: 30, height: 30, subdivisions: 40 },
+      { width: 40, height: 40, subdivisions: 2 },
       scene
     );
-    const groundMaterial = new BABYLON.StandardMaterial(
-      "groundMaterial",
+    const gMat = new BABYLON.StandardMaterial(
+      "gMat",
       scene
     );
-    groundMaterial.diffuseColor = new BABYLON.Color3(0.12, 0.12, 0.12);
-    groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-    ground.material = groundMaterial;
+    gMat.diffuseColor = new BABYLON.Color3(0.9, 0.9, 0.9);
+    gMat.specularColor = new BABYLON.Color3(
+      0.15, 0.15, 0.15
+    );
+    ground.material = gMat;
     ground.receiveShadows = true;
 
-    const grid = BABYLON.MeshBuilder.CreateGround(
-      "grid",
-      { width: 30, height: 30, subdivisions: 30 },
+    const gridLines = BABYLON.MeshBuilder.CreateGround(
+      "gridLines",
+      { width: 40, height: 40, subdivisions: 32 },
       scene
     );
-    const gridMaterial = new BABYLON.StandardMaterial("gridMaterial", scene);
-    gridMaterial.diffuseColor = new BABYLON.Color3(0.18, 0.18, 0.18);
-    gridMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-    gridMaterial.wireframe = true;
-    grid.material = gridMaterial;
-    grid.position.y = 0.001;
+    const gridMat = new BABYLON.StandardMaterial(
+      "gridMat",
+      scene
+    );
+    gridMat.diffuseColor = new BABYLON.Color3(
+      0.82, 0.82, 0.82
+    );
+    gridMat.specularColor = BABYLON.Color3.Black();
+    gridMat.wireframe = true;
+    gridMat.alpha = 0.4;
+    gridLines.material = gridMat;
+    gridLines.position.y = 0.002;
 
-    scene.onPointerObservable.add((pointerInfo) => {
+    scene.onPointerObservable.add((pi) => {
       if (!onSelectModule) return;
-      if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
-
-      const pickInfo = pointerInfo.pickInfo;
-      if (!pickInfo?.hit || !pickInfo.pickedMesh) return;
-
-      let current = pickInfo.pickedMesh;
-      while (current) {
-        const moduleId = current.metadata?.moduleId;
-        if (moduleId) {
-          onSelectModule(moduleId);
+      if (
+        pi.type !== BABYLON.PointerEventTypes.POINTERPICK
+      ) {
+        return;
+      }
+      const pk = pi.pickInfo;
+      if (!pk?.hit || !pk.pickedMesh) return;
+      let cur = pk.pickedMesh;
+      while (cur) {
+        const mid = cur.metadata?.moduleId;
+        if (mid) {
+          onSelectModule(mid);
           break;
         }
-        current = current.parent;
+        cur = cur.parent;
       }
     });
 
-    engine.runRenderLoop(() => {
-      scene.render();
-    });
+    engine.runRenderLoop(() => scene.render());
 
-    const handleResize = () => {
-      engine.resize();
-    };
-    window.addEventListener("resize", handleResize);
+    const onResize = () => engine.resize();
+    window.addEventListener("resize", onResize);
+
+    const ro = new ResizeObserver(() => engine.resize());
+    if (canvasRef.current) ro.observe(canvasRef.current);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      ro.disconnect();
+      window.removeEventListener("resize", onResize);
       engine.stopRenderLoop();
+      gltfCache.clear();
       engine.dispose();
       sceneRef.current = null;
       engineRef.current = null;
-      shadowGeneratorRef.current = null;
-      moduleNodesRef.current.clear();
+      sgRef.current = null;
+      nodesRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * frontType별 메쉬 생성 (Phase A: 프리미티브).
-   * Phase B: USE_GLTF_MODELS && HALLER_GLTF_BASE_URL일 때
-   * SceneLoader.ImportMeshAsync로 glTF 로드 후 노드에 부착·스케일 적용.
-   */
-  const buildModuleMeshes = (
-    scene,
-    node,
-    id,
-    frontType,
-    color,
-    isSelected,
-    shadowGenerator
-  ) => {
-    void USE_GLTF_MODELS;
-    void HALLER_GLTF_BASE_URL;
-    node.getChildren().forEach((c) => c.dispose());
-
-    const frame = BABYLON.MeshBuilder.CreateBox(
-      `moduleFrame-${id}`,
-      {
-        width: 1.02,
-        height: 1.02,
-        depth: 1.02,
-        sideOrientation: BABYLON.Mesh.DOUBLESIDE,
-      },
-      scene
-    );
-    const frameMat = new BABYLON.StandardMaterial(
-      `moduleFrameMaterial-${id}`,
-      scene
-    );
-    frameMat.diffuseColor = new BABYLON.Color3(0.85, 0.85, 0.85);
-    frameMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
-    frameMat.wireframe = true;
-    frameMat.backFaceCulling = false;
-    frame.material = frameMat;
-    frame.parent = node;
-
-    const body = BABYLON.MeshBuilder.CreateBox(
-      `moduleBody-${id}`,
-      { width: 0.96, height: 0.96, depth: 0.96 },
-      scene
-    );
-    const bodyMat = new BABYLON.StandardMaterial(
-      `moduleBodyMaterial-${id}`,
-      scene
-    );
-    try {
-      bodyMat.diffuseColor = BABYLON.Color3.FromHexString(color);
-    } catch {
-      bodyMat.diffuseColor = BABYLON.Color3.FromHexString("#ffffff");
-    }
-    bodyMat.specularColor = new BABYLON.Color3(0.25, 0.25, 0.25);
-    if (frontType === "glass") {
-      bodyMat.alpha = 0.65;
-      bodyMat.backFaceCulling = false;
-    }
-    body.material = bodyMat;
-    body.parent = node;
-
-    let doorPanel = null;
-    let drawerFront = null;
-    if (frontType === "door") {
-      doorPanel = BABYLON.MeshBuilder.CreatePlane(
-        `moduleDoor-${id}`,
-        { size: 0.94, sideOrientation: BABYLON.Mesh.DOUBLESIDE },
-        scene
-      );
-      doorPanel.position.z = 0.48;
-      const doorMat = new BABYLON.StandardMaterial(
-        `moduleDoorMaterial-${id}`,
-        scene
-      );
-      try {
-        doorMat.diffuseColor = BABYLON.Color3.FromHexString(color);
-      } catch {
-        doorMat.diffuseColor = BABYLON.Color3.FromHexString("#ffffff");
-      }
-      doorMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
-      doorPanel.material = doorMat;
-      doorPanel.parent = node;
-      if (shadowGenerator) shadowGenerator.addShadowCaster(doorPanel);
-    }
-
-    if (frontType === "drawer") {
-      drawerFront = BABYLON.MeshBuilder.CreateBox(
-        `moduleDrawerFront-${id}`,
-        { width: 0.94, height: 0.3, depth: 0.04 },
-        scene
-      );
-      drawerFront.position.y = -0.33;
-      drawerFront.position.z = 0.48;
-      const drawerMat = new BABYLON.StandardMaterial(
-        `moduleDrawerMaterial-${id}`,
-        scene
-      );
-      try {
-        drawerMat.diffuseColor = BABYLON.Color3.FromHexString(color);
-      } catch {
-        drawerMat.diffuseColor = BABYLON.Color3.FromHexString("#ffffff");
-      }
-      drawerMat.specularColor = new BABYLON.Color3(0.25, 0.25, 0.25);
-      drawerFront.material = drawerMat;
-      drawerFront.parent = node;
-      if (shadowGenerator) shadowGenerator.addShadowCaster(drawerFront);
-    }
-
-    if (shadowGenerator) {
-      shadowGenerator.addShadowCaster(frame);
-      shadowGenerator.addShadowCaster(body);
-    }
-
-    const colorMeshes = [body];
-    if (doorPanel) colorMeshes.push(doorPanel);
-    if (drawerFront) colorMeshes.push(drawerFront);
-    colorMeshes.forEach((mesh) => {
-      if (!mesh || !(mesh.material instanceof BABYLON.StandardMaterial)) return;
-      mesh.material.emissiveColor = isSelected
-        ? BABYLON.Color3.FromHexString("#fbbf24")
-        : new BABYLON.Color3(0, 0, 0);
-    });
-  };
-
   useEffect(() => {
     const scene = sceneRef.current;
-    const shadowGenerator = shadowGeneratorRef.current;
+    const sg = sgRef.current;
     if (!scene || !configuration) return;
 
     const modules = Array.isArray(configuration.modules)
       ? configuration.modules
       : [];
-    const nodeMap = moduleNodesRef.current;
+    const cfgBaseType = configuration.baseType || "glide";
+    const nodeMap = nodesRef.current;
 
     const existingIds = new Set(nodeMap.keys());
     const nextIds = new Set(modules.map((m) => m.id));
 
-    existingIds.forEach((id) => {
-      if (!nextIds.has(id)) {
-        const node = nodeMap.get(id);
-        if (node) {
-          node.getChildren()?.forEach((child) => child.dispose());
-          node.dispose();
+    existingIds.forEach((mid) => {
+      if (!nextIds.has(mid)) {
+        const nd = nodeMap.get(mid);
+        if (nd) {
+          disposeChildren(nd);
+          nd.dispose();
         }
-        nodeMap.delete(id);
+        nodeMap.delete(mid);
       }
     });
 
-    modules.forEach((module) => {
+    const clampDim = (v) =>
+      Number.isFinite(v) ? Math.max(v, 0.1) : 1;
+
+    const maxW = modules.length
+      ? Math.max(...modules.map((m) => clampDim(m.width)))
+      : 1;
+    const maxH = modules.length
+      ? Math.max(...modules.map((m) => clampDim(m.height)))
+      : 1;
+    const maxD = modules.length
+      ? Math.max(...modules.map((m) => clampDim(m.depth)))
+      : 1;
+
+    const BASE_HEIGHTS = {
+      caster: 0.14,
+      glide: 0.086,
+      leveler: 0.082,
+      none: 0,
+    };
+    const baseHeight = BASE_HEIGHTS[cfgBaseType] || 0;
+
+    let minX = Infinity,
+      maxX = -Infinity,
+      maxY = 0;
+
+    modules.forEach((mod) => {
       const {
         id,
         width = 1,
@@ -287,82 +1383,102 @@ const Haller3DCanvas = forwardRef(function Haller3DCanvas(
         gridX = 0,
         gridY = 0,
         gridZ = 0,
-      } = module;
+      } = mod;
 
-      const safeWidth = Number.isFinite(width) ? Math.max(width, 0.1) : 1;
-      const safeHeight = Number.isFinite(height) ? Math.max(height, 0.1) : 1;
-      const safeDepth = Number.isFinite(depth) ? Math.max(depth, 0.1) : 1;
+      const w = clampDim(width);
+      const h = clampDim(height);
+      const d = clampDim(depth);
 
-      const unit = 1.2;
-      const x = gridX * unit;
-      const y = safeHeight / 2 + gridY * unit;
-      const z = gridZ * unit;
+      const x = gridX * maxW;
+      const y = h / 2 + gridY * maxH + baseHeight;
+      const z = gridZ * maxD;
+      const isSelected = selectedModuleId === id;
+      const isBottom = gridY === 0;
+
+      minX = Math.min(minX, x - w / 2);
+      maxX = Math.max(maxX, x + w / 2);
+      maxY = Math.max(maxY, y + h / 2);
 
       let node = nodeMap.get(id);
+      const meta = node?.metadata;
       const needsRebuild =
         !node ||
-        (node.metadata?.lastFrontType !== frontType);
+        meta?.lastFront !== frontType ||
+        meta?.lastW !== w ||
+        meta?.lastH !== h ||
+        meta?.lastD !== d ||
+        meta?.lastBaseType !== cfgBaseType;
 
       if (!node) {
-        node = new BABYLON.TransformNode(`moduleNode-${id}`, scene);
+        node = new BABYLON.TransformNode(
+          `mod-${id}`,
+          scene
+        );
         node.metadata = { moduleId: id };
         nodeMap.set(id, node);
       }
 
       if (needsRebuild) {
-        node.metadata.lastFrontType = frontType;
+        node.metadata = {
+          ...node.metadata,
+          lastFront: frontType,
+          lastW: w,
+          lastH: h,
+          lastD: d,
+          lastBaseType: cfgBaseType,
+        };
         buildModuleMeshes(
           scene,
           node,
           id,
           frontType,
           color,
-          selectedModuleId === id,
-          shadowGenerator
+          isSelected,
+          sg,
+          w,
+          h,
+          d,
+          isBottom,
+          cfgBaseType
         );
+      } else {
+        updateColors(node, color, frontType, isSelected);
       }
 
-      node.scaling = new BABYLON.Vector3(safeWidth, safeHeight, safeDepth);
       node.position = new BABYLON.Vector3(x, y, z);
-
-      const children = node.getChildren();
-      children.forEach((child) => {
-        if (!(child instanceof BABYLON.Mesh)) return;
-        const isColorMesh =
-          child.name.startsWith("moduleBody-") ||
-          child.name.startsWith("moduleDoor-") ||
-          child.name.startsWith("moduleDrawerFront-");
-        if (isColorMesh && child.material instanceof BABYLON.StandardMaterial) {
-          try {
-            child.material.diffuseColor = BABYLON.Color3.FromHexString(color);
-          } catch {
-            child.material.diffuseColor =
-              BABYLON.Color3.FromHexString("#ffffff");
-          }
-          if (child.material.alpha !== undefined && frontType === "glass") {
-            child.material.alpha = 0.65;
-          }
-          child.material.emissiveColor =
-            selectedModuleId && id === selectedModuleId
-              ? BABYLON.Color3.FromHexString("#fbbf24")
-              : new BABYLON.Color3(0, 0, 0);
-        }
-      });
     });
+
+    buildDimensionLines(
+      scene, modules, maxW, maxH, maxD, baseHeight
+    );
+
+    if (modules.length > 0) {
+      const cam = scene.activeCamera;
+      if (cam instanceof BABYLON.ArcRotateCamera) {
+        const cX = (minX + maxX) / 2;
+        const cY = maxY / 2;
+        cam.target = new BABYLON.Vector3(cX, cY, 0);
+        const span = Math.max(maxX - minX, maxY, 1);
+        cam.radius = span * 2.2;
+      }
+    }
   }, [configuration, selectedModuleId, onSelectModule]);
 
   useImperativeHandle(ref, () => ({
     captureAsDataURL(mimeType = "image/png") {
-      const canvas = canvasRef.current;
-      if (!canvas) return null;
-      return canvas.toDataURL(mimeType);
+      const c = canvasRef.current;
+      if (!c) return null;
+      return c.toDataURL(mimeType);
     },
   }));
 
   return (
     <canvas
       ref={canvasRef}
-      className="w-full h-[400px] md:h-[520px] bg-gray-900 rounded-sm"
+      className={
+        "w-full h-full rounded-sm " +
+        "bg-neutral-200 dark:bg-gray-900"
+      }
     />
   );
 });
