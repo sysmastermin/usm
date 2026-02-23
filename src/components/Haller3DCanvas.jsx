@@ -92,10 +92,26 @@ function makePanelMat(scene, name, hex, glass = false) {
   const m = new BABYLON.StandardMaterial(name, scene);
   m.diffuseColor = safeColor(hex);
   if (glass) {
-    m.specularColor = new BABYLON.Color3(0.6, 0.6, 0.6);
-    m.specularPower = 96;
-    m.alpha = 0.3;
+    m.diffuseColor = new BABYLON.Color3(0.55, 0.72, 0.82);
+    m.specularColor = new BABYLON.Color3(0.95, 0.97, 1.0);
+    m.specularPower = 160;
+    m.alpha = 0.52;
     m.backFaceCulling = false;
+    m.emissiveColor = new BABYLON.Color3(0.12, 0.18, 0.25);
+    m.emissiveFresnelParameters =
+      new BABYLON.FresnelParameters({
+        bias: 0.35,
+        power: 2,
+        leftColor: new BABYLON.Color3(0.7, 0.85, 1.0),
+        rightColor: BABYLON.Color3.Black(),
+      });
+    m.opacityFresnelParameters =
+      new BABYLON.FresnelParameters({
+        bias: 0.55,
+        power: 1.8,
+        leftColor: BABYLON.Color3.White(),
+        rightColor: new BABYLON.Color3(0.45, 0.45, 0.45),
+      });
   } else {
     m.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3);
     m.specularPower = 32;
@@ -295,6 +311,89 @@ function buildHallerPanels(
 
 // ── Geometry: Front Face (door / drawer / glass) ────────────
 
+const DOOR_OPEN_ANGLE = Math.PI * 0.45;
+const DRAWER_OPEN_RATIO = 0.7;
+const ANIM_FPS = 30;
+const ANIM_FRAMES = 15;
+
+const _openStateMap = new Map();
+
+function toggleFrontOpen(scene, moduleId) {
+  const isOpen = _openStateMap.get(moduleId) || false;
+  const target = !isOpen;
+  _openStateMap.set(moduleId, target);
+
+  const rootNode = scene.getTransformNodeByName(
+    `mod-${moduleId}`
+  );
+  if (!rootNode) return;
+
+  const pivot = rootNode.getChildren().find(
+    (c) =>
+      c instanceof BABYLON.TransformNode &&
+      c.metadata?.isPivot
+  );
+  if (!pivot) return;
+
+  const ft = pivot.metadata.frontType;
+  const ease = new BABYLON.QuadraticEase();
+  ease.setEasingMode(
+    BABYLON.EasingFunction.EASINGMODE_EASEINOUT
+  );
+
+  if (ft === "door") {
+    const from = pivot.rotation.x;
+    const to = target ? DOOR_OPEN_ANGLE : 0;
+    const anim = new BABYLON.Animation(
+      `doorAnim-${moduleId}`,
+      "rotation.x",
+      ANIM_FPS,
+      BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+      BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    anim.setKeys([
+      { frame: 0, value: from },
+      { frame: ANIM_FRAMES, value: to },
+    ]);
+    anim.setEasingFunction(ease);
+    pivot.animations = [anim];
+    scene.beginAnimation(pivot, 0, ANIM_FRAMES, false);
+  } else if (ft === "drawer") {
+    const baseZ = pivot.metadata.closedZ;
+    const openZ =
+      baseZ + pivot.metadata.depth * DRAWER_OPEN_RATIO;
+    const from = pivot.position.z;
+    const to = target ? openZ : baseZ;
+    const anim = new BABYLON.Animation(
+      `drawerAnim-${moduleId}`,
+      "position.z",
+      ANIM_FPS,
+      BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+      BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    anim.setKeys([
+      { frame: 0, value: from },
+      { frame: ANIM_FRAMES, value: to },
+    ]);
+    anim.setEasingFunction(ease);
+    pivot.animations = [anim];
+    scene.beginAnimation(pivot, 0, ANIM_FRAMES, false);
+  }
+}
+
+function restoreFrontOpenState(pivot, moduleId) {
+  const isOpen = _openStateMap.get(moduleId) || false;
+  if (!isOpen) return;
+  const ft = pivot.metadata.frontType;
+  if (ft === "door") {
+    pivot.rotation.x = DOOR_OPEN_ANGLE;
+  } else if (ft === "drawer") {
+    pivot.position.z =
+      pivot.metadata.closedZ +
+      pivot.metadata.depth * DRAWER_OPEN_RATIO;
+  }
+}
+
 function buildHallerFront(
   scene,
   node,
@@ -312,7 +411,38 @@ function buildHallerFront(
   const pw = hw - ins;
   const ph = hh - ins;
   const isGlass = frontType === "glass";
+  const needsPivot =
+    frontType === "door" || frontType === "drawer";
 
+  let pivotNode = null;
+  if (needsPivot) {
+    pivotNode = new BABYLON.TransformNode(
+      `frontPivot-${id}`,
+      scene
+    );
+    pivotNode.parent = node;
+    if (frontType === "door") {
+      pivotNode.position.y = -ph;
+      pivotNode.metadata = {
+        isPivot: true,
+        frontType,
+        moduleId: id,
+      };
+    } else {
+      pivotNode.position = BABYLON.Vector3.Zero();
+      pivotNode.metadata = {
+        isPivot: true,
+        frontType,
+        moduleId: id,
+        closedZ: 0,
+        depth: hd * 2,
+      };
+    }
+  }
+
+  const parentForFront = pivotNode || node;
+
+  const panelY = frontType === "door" ? ph : 0;
   const panel = BABYLON.MeshBuilder.CreateBox(
     `front-${id}`,
     { width: pw * 2, height: ph * 2, depth: PANEL_THICK },
@@ -320,7 +450,7 @@ function buildHallerFront(
   );
   panel.position = new BABYLON.Vector3(
     0,
-    0,
+    panelY,
     hd - PANEL_THICK / 2
   );
   panel.material = makePanelMat(
@@ -329,8 +459,12 @@ function buildHallerFront(
     color,
     isGlass
   );
-  panel.parent = node;
-  panel.metadata = { meshType: "front" };
+  panel.parent = parentForFront;
+  panel.metadata = {
+    meshType: "front",
+    frontType,
+    pivotNode,
+  };
   if (sg) sg.addShadowCaster(panel);
 
   if (isGlass) return;
@@ -338,93 +472,211 @@ function buildHallerFront(
   const hMat = getHandleMat(scene);
 
   if (frontType === "door") {
-    const bar = BABYLON.MeshBuilder.CreateCylinder(
-      `hdl-${id}`,
+    const knobR = 0.022;
+    const knobDepth = 0.008;
+    const stemR = 0.006;
+    const stemLen = HANDLE_OFF;
+    const handleY = panelY + ph - knobR - 0.02;
+
+    const stem = BABYLON.MeshBuilder.CreateCylinder(
+      `hStem-${id}`,
       {
-        height: HANDLE_LEN,
-        diameter: HANDLE_R * 2,
-        tessellation: 8,
+        height: stemLen,
+        diameter: stemR * 2,
+        tessellation: 12,
       },
       scene
     );
-    bar.rotation.z = Math.PI / 2;
-    const hx = pw - HANDLE_LEN / 2 - 0.02;
-    bar.position = new BABYLON.Vector3(
-      hx,
+    stem.rotation.x = Math.PI / 2;
+    stem.position = new BABYLON.Vector3(
       0,
-      hd + HANDLE_OFF
+      handleY,
+      hd + stemLen / 2
     );
-    bar.material = hMat;
-    bar.parent = node;
-    bar.metadata = { meshType: "handle" };
+    stem.material = hMat;
+    stem.parent = parentForFront;
+    stem.metadata = {
+      meshType: "handle",
+      frontType,
+      pivotNode,
+    };
 
-    const gap = HANDLE_LEN - 0.03;
-    [-gap / 2, gap / 2].forEach((dx, i) => {
-      const br = BABYLON.MeshBuilder.CreateCylinder(
-        `hBr-${id}-${i}`,
-        {
-          height: HANDLE_OFF,
-          diameter: HANDLE_R * 1.4,
-          tessellation: 6,
-        },
-        scene
-      );
-      br.rotation.x = Math.PI / 2;
-      br.position = new BABYLON.Vector3(
-        hx + dx,
-        0,
-        hd + HANDLE_OFF / 2
-      );
-      br.material = hMat;
-      br.parent = node;
-      br.metadata = { meshType: "handle" };
-    });
+    const knob = BABYLON.MeshBuilder.CreateCylinder(
+      `hdl-${id}`,
+      {
+        height: knobDepth,
+        diameter: knobR * 2,
+        tessellation: 24,
+      },
+      scene
+    );
+    knob.rotation.x = Math.PI / 2;
+    knob.position = new BABYLON.Vector3(
+      0,
+      handleY,
+      hd + stemLen + knobDepth / 2
+    );
+    knob.material = hMat;
+    knob.parent = parentForFront;
+    knob.metadata = {
+      meshType: "handle",
+      frontType,
+      pivotNode,
+    };
+
+    const rimR = knobR + 0.002;
+    const rim = BABYLON.MeshBuilder.CreateTorus(
+      `hRim-${id}`,
+      {
+        diameter: rimR * 2,
+        thickness: 0.003,
+        tessellation: 24,
+      },
+      scene
+    );
+    rim.rotation.x = Math.PI / 2;
+    rim.position = new BABYLON.Vector3(
+      0,
+      handleY,
+      hd + stemLen + knobDepth
+    );
+    rim.material = hMat;
+    rim.parent = parentForFront;
+    rim.metadata = {
+      meshType: "handle",
+      frontType,
+      pivotNode,
+    };
+
+    restoreFrontOpenState(pivotNode, id);
     return;
   }
 
   if (frontType === "drawer") {
-    const pullW = pw * 1.2;
-    const pullY = -ph * 0.35;
+    const frameMat = getChromeMat(scene);
+    const wallH = ph * 0.45;
+    const wallD = hd * 1.6;
+    const wallT = PANEL_THICK;
+    const wallZ = hd - wallD / 2 - PANEL_THICK;
 
-    const pull = BABYLON.MeshBuilder.CreateCylinder(
-      `hdl-${id}`,
+    const leftWall = BABYLON.MeshBuilder.CreateBox(
+      `dWallL-${id}`,
+      { width: wallT, height: wallH, depth: wallD },
+      scene
+    );
+    leftWall.position = new BABYLON.Vector3(
+      -(pw - wallT / 2),
+      -(ph - wallH / 2),
+      wallZ
+    );
+    leftWall.material = frameMat;
+    leftWall.parent = parentForFront;
+    leftWall.metadata = { meshType: "frame" };
+
+    const rightWall = BABYLON.MeshBuilder.CreateBox(
+      `dWallR-${id}`,
+      { width: wallT, height: wallH, depth: wallD },
+      scene
+    );
+    rightWall.position = new BABYLON.Vector3(
+      pw - wallT / 2,
+      -(ph - wallH / 2),
+      wallZ
+    );
+    rightWall.material = frameMat;
+    rightWall.parent = parentForFront;
+    rightWall.metadata = { meshType: "frame" };
+
+    const floor = BABYLON.MeshBuilder.CreateBox(
+      `dFloor-${id}`,
+      { width: pw * 2, height: wallT, depth: wallD },
+      scene
+    );
+    floor.position = new BABYLON.Vector3(
+      0,
+      -ph + wallT / 2,
+      wallZ
+    );
+    floor.material = frameMat;
+    floor.parent = parentForFront;
+    floor.metadata = { meshType: "frame" };
+
+    const knobR = 0.022;
+    const knobDepth = 0.008;
+    const stemR = 0.006;
+    const stemLen = HANDLE_OFF;
+
+    const stem = BABYLON.MeshBuilder.CreateCylinder(
+      `hStem-${id}`,
       {
-        height: pullW,
-        diameter: HANDLE_R * 2.5,
-        tessellation: 8,
+        height: stemLen,
+        diameter: stemR * 2,
+        tessellation: 12,
       },
       scene
     );
-    pull.rotation.z = Math.PI / 2;
-    pull.position = new BABYLON.Vector3(
+    stem.rotation.x = Math.PI / 2;
+    stem.position = new BABYLON.Vector3(
       0,
-      pullY,
-      hd + HANDLE_OFF
+      0,
+      hd + stemLen / 2
     );
-    pull.material = hMat;
-    pull.parent = node;
-    pull.metadata = { meshType: "handle" };
+    stem.material = hMat;
+    stem.parent = parentForFront;
+    stem.metadata = {
+      meshType: "handle",
+      frontType,
+      pivotNode,
+    };
 
-    [-pullW / 2, pullW / 2].forEach((dx, i) => {
-      const br = BABYLON.MeshBuilder.CreateCylinder(
-        `pBr-${id}-${i}`,
-        {
-          height: HANDLE_OFF,
-          diameter: HANDLE_R * 1.4,
-          tessellation: 6,
-        },
-        scene
-      );
-      br.rotation.x = Math.PI / 2;
-      br.position = new BABYLON.Vector3(
-        dx,
-        pullY,
-        hd + HANDLE_OFF / 2
-      );
-      br.material = hMat;
-      br.parent = node;
-      br.metadata = { meshType: "handle" };
-    });
+    const knob = BABYLON.MeshBuilder.CreateCylinder(
+      `hdl-${id}`,
+      {
+        height: knobDepth,
+        diameter: knobR * 2,
+        tessellation: 24,
+      },
+      scene
+    );
+    knob.rotation.x = Math.PI / 2;
+    knob.position = new BABYLON.Vector3(
+      0,
+      0,
+      hd + stemLen + knobDepth / 2
+    );
+    knob.material = hMat;
+    knob.parent = parentForFront;
+    knob.metadata = {
+      meshType: "handle",
+      frontType,
+      pivotNode,
+    };
+
+    const rimR = knobR + 0.002;
+    const rim = BABYLON.MeshBuilder.CreateTorus(
+      `hRim-${id}`,
+      {
+        diameter: rimR * 2,
+        thickness: 0.003,
+        tessellation: 24,
+      },
+      scene
+    );
+    rim.rotation.x = Math.PI / 2;
+    rim.position = new BABYLON.Vector3(
+      0,
+      0,
+      hd + stemLen + knobDepth
+    );
+    rim.material = hMat;
+    rim.parent = parentForFront;
+    rim.metadata = {
+      meshType: "handle",
+      frontType,
+      pivotNode,
+    };
+
+    restoreFrontOpenState(pivotNode, id);
   }
 }
 
@@ -925,9 +1177,19 @@ function buildModuleMeshes(
 const SEL_OUTLINE_COLOR = new BABYLON.Color3(1, 1, 1);
 const SEL_OUTLINE_WIDTH = 0.012;
 
-function applySelection(node, isSelected) {
+function getAllDescendantMeshes(node) {
+  const result = [];
   node.getChildren().forEach((c) => {
-    if (!(c instanceof BABYLON.Mesh)) return;
+    if (c instanceof BABYLON.Mesh) result.push(c);
+    if (c instanceof BABYLON.TransformNode) {
+      result.push(...getAllDescendantMeshes(c));
+    }
+  });
+  return result;
+}
+
+function applySelection(node, isSelected) {
+  getAllDescendantMeshes(node).forEach((c) => {
     const t = c.metadata?.meshType;
     if (!t) return;
 
@@ -947,8 +1209,7 @@ function applySelection(node, isSelected) {
 }
 
 function updateColors(node, color, frontType, isSelected) {
-  node.getChildren().forEach((c) => {
-    if (!(c instanceof BABYLON.Mesh)) return;
+  getAllDescendantMeshes(node).forEach((c) => {
     const t = c.metadata?.meshType;
     if (
       (t === "panel" || t === "front") &&
@@ -956,7 +1217,7 @@ function updateColors(node, color, frontType, isSelected) {
     ) {
       c.material.diffuseColor = safeColor(color);
       if (t === "front" && frontType === "glass") {
-        c.material.alpha = 0.3;
+        c.material.alpha = 0.52;
       }
     }
   });
@@ -1287,8 +1548,98 @@ const Haller3DCanvas = forwardRef(function Haller3DCanvas(
     gridLines.material = gridMat;
     gridLines.position.y = 0.002;
 
+    let _hoveredFront = null;
+
+    const HOVER_OUTLINE_COLOR =
+      new BABYLON.Color3(0.3, 0.6, 1.0);
+    const HOVER_OUTLINE_W = 0.006;
+
+    scene.constantlyUpdateMeshUnderPointer = true;
+
+    function findModuleId(mesh) {
+      let cur = mesh;
+      while (cur) {
+        if (cur.metadata?.moduleId)
+          return cur.metadata.moduleId;
+        cur = cur.parent;
+      }
+      return null;
+    }
+
+    function isDoorOrDrawerMesh(mesh) {
+      const t = mesh?.metadata?.meshType;
+      if (t !== "front" && t !== "handle") return false;
+      const ft = mesh?.metadata?.frontType;
+      return ft === "door" || ft === "drawer";
+    }
+
+    function findFrontPanel(mesh) {
+      if (mesh?.metadata?.meshType === "front") return mesh;
+      const pivot = mesh?.metadata?.pivotNode;
+      if (pivot) {
+        const ch = pivot.getChildMeshes(true);
+        for (const c of ch) {
+          if (c.metadata?.meshType === "front") return c;
+        }
+      }
+      let cur = mesh?.parent;
+      while (cur) {
+        const ch = cur.getChildMeshes
+          ? cur.getChildMeshes(true)
+          : [];
+        for (const c of ch) {
+          if (c.metadata?.meshType === "front") return c;
+        }
+        cur = cur.parent;
+      }
+      return null;
+    }
+
+    function clearHover() {
+      if (_hoveredFront) {
+        _hoveredFront.renderOutline = false;
+        _hoveredFront = null;
+      }
+      canvas.style.cursor = "";
+    }
+
     scene.onPointerObservable.add((pi) => {
-      if (!onSelectModule) return;
+      if (
+        pi.type === BABYLON.PointerEventTypes.POINTERMOVE
+      ) {
+        const mesh = scene.meshUnderPointer;
+        if (!mesh || !isDoorOrDrawerMesh(mesh)) {
+          clearHover();
+          return;
+        }
+        const fp = findFrontPanel(mesh);
+        if (fp && fp !== _hoveredFront) {
+          clearHover();
+          _hoveredFront = fp;
+          fp.renderOutline = true;
+          fp.outlineColor = HOVER_OUTLINE_COLOR;
+          fp.outlineWidth = HOVER_OUTLINE_W;
+        }
+        canvas.style.cursor = "pointer";
+        return;
+      }
+
+      if (
+        pi.type ===
+        BABYLON.PointerEventTypes.POINTERDOUBLETAP
+      ) {
+        const pk = pi.pickInfo;
+        if (!pk?.hit || !pk.pickedMesh) return;
+        const mesh = pk.pickedMesh;
+        if (isDoorOrDrawerMesh(mesh)) {
+          const mid = findModuleId(mesh);
+          if (mid) {
+            toggleFrontOpen(scene, mid);
+            return;
+          }
+        }
+      }
+
       if (
         pi.type !== BABYLON.PointerEventTypes.POINTERPICK
       ) {
@@ -1296,14 +1647,9 @@ const Haller3DCanvas = forwardRef(function Haller3DCanvas(
       }
       const pk = pi.pickInfo;
       if (!pk?.hit || !pk.pickedMesh) return;
-      let cur = pk.pickedMesh;
-      while (cur) {
-        const mid = cur.metadata?.moduleId;
-        if (mid) {
-          onSelectModule(mid);
-          break;
-        }
-        cur = cur.parent;
+      const moduleId = findModuleId(pk.pickedMesh);
+      if (moduleId && onSelectModule) {
+        onSelectModule(moduleId);
       }
     });
 
