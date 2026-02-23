@@ -174,6 +174,7 @@ export default function ConfiguratorPage() {
   const [canRedo, setCanRedo] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState(false);
   const canvasRef = useRef(null);
   const historyRef = useRef([]);
   const redoRef = useRef([]);
@@ -288,6 +289,9 @@ export default function ConfiguratorPage() {
     setCanRedo(redoRef.current.length > 0);
   };
 
+  const isMobile =
+    typeof window !== "undefined" && window.innerWidth < 768;
+
   const setAllModulesField = (key, value) => {
     pushHistory();
     setModules((prev) =>
@@ -305,6 +309,9 @@ export default function ConfiguratorPage() {
           : m
       )
     );
+    if (isMobile && (key === "color" || key === "frontType")) {
+      setMobilePanel(false);
+    }
   };
 
   const canAddAt = useCallback(
@@ -472,6 +479,7 @@ export default function ConfiguratorPage() {
     );
     setModules(next);
     setSelectedId(next[0]?.id ?? null);
+    if (isMobile) setMobilePanel(false);
   };
 
   const handleNewConfig = () => {
@@ -541,6 +549,17 @@ export default function ConfiguratorPage() {
   keyHandlersRef.current.handleRedo = handleRedo;
   keyHandlersRef.current.handleRemoveSelectedModule =
     handleRemoveSelectedModule;
+
+  useEffect(() => {
+    if (mobilePanel) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobilePanel]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -651,7 +670,7 @@ export default function ConfiguratorPage() {
             setSelectedModuleField(field, value);
           }
         }}
-        className={`px-2.5 py-1.5 text-xs font-medium border transition-colors ${
+        className={`px-3 py-2 md:px-2.5 md:py-1.5 text-xs font-medium border rounded-sm transition-colors ${
           isActive
             ? "bg-black text-white border-black dark:bg-white dark:text-black dark:border-white"
             : "bg-white text-gray-700 border-gray-300 hover:border-gray-500 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:border-gray-400"
@@ -665,15 +684,44 @@ export default function ConfiguratorPage() {
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-black text-gray-900 dark:text-white">
       {/* ── Top Toolbar ─────────────────────────── */}
-      <div className="flex items-center justify-between h-11 px-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between h-11 px-2 md:px-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
+        <div className="flex items-center gap-0.5 md:gap-1">
           <Link
             to="/"
-            className="text-xs font-bold tracking-widest text-gray-900 dark:text-white mr-3"
+            className="text-xs font-bold tracking-widest text-gray-900 dark:text-white mr-1.5 md:mr-3"
           >
             USM
           </Link>
-          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mr-1" />
+          <button
+            type="button"
+            onClick={() => setMobilePanel((v) => !v)}
+            className="md:hidden p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            title="설정 패널"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              {mobilePanel ? (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              ) : (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              )}
+            </svg>
+          </button>
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5 md:mr-1" />
           <button
             type="button"
             onClick={handleUndo}
@@ -716,7 +764,7 @@ export default function ConfiguratorPage() {
               />
             </svg>
           </button>
-          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5 md:mx-1" />
           <button
             type="button"
             onClick={handleRemoveSelectedModule}
@@ -740,12 +788,12 @@ export default function ConfiguratorPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 md:gap-1">
           <button
             type="button"
             onClick={handleCopyShareLink}
             title="구성 링크 복사"
-            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="hidden md:block p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <svg
               className="w-4 h-4"
@@ -765,7 +813,7 @@ export default function ConfiguratorPage() {
             type="button"
             onClick={handleScreenshot}
             title="스크린샷 저장"
-            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="hidden md:block p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <svg
               className="w-4 h-4"
@@ -785,7 +833,7 @@ export default function ConfiguratorPage() {
             type="button"
             onClick={() => setShowHelp((v) => !v)}
             title="도움말"
-            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="hidden md:block p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <svg
               className="w-4 h-4"
@@ -803,7 +851,7 @@ export default function ConfiguratorPage() {
           </button>
         </div>
 
-        <div className="text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
+        <div className="hidden md:block text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
           ₩{referencePrice.toLocaleString("ko-KR")}
         </div>
       </div>
@@ -846,9 +894,34 @@ export default function ConfiguratorPage() {
       )}
 
       {/* ── Main Area: Left Panel + 3D Viewer ──── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── Left Panel ─────────────────────────── */}
-        <div className="w-[280px] shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/80">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* ── Mobile Backdrop ──────────────────── */}
+        {mobilePanel && (
+          <div
+            className="md:hidden fixed inset-0 z-30 bg-black/40"
+            onClick={() => setMobilePanel(false)}
+          />
+        )}
+
+        {/* ── Left Panel / Mobile Bottom Sheet ─── */}
+        <div
+          className={[
+            "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/80",
+            "hidden md:flex md:flex-col md:w-[280px] md:shrink-0 md:border-r",
+            mobilePanel
+              ? "!flex !flex-col fixed inset-x-0 bottom-0 z-40 h-[65vh] rounded-t-2xl shadow-2xl border-t"
+              : "",
+            "max-md:transition-transform max-md:duration-300 max-md:ease-out",
+          ].join(" ")}
+        >
+          {/* Mobile drag handle + close area */}
+          <div
+            className="md:hidden flex justify-center pt-2 pb-1 shrink-0 cursor-grab active:cursor-grabbing"
+            onClick={() => setMobilePanel(false)}
+          >
+            <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+          </div>
+
           {/* Tab Bar */}
           <div className="flex border-b border-gray-200 dark:border-gray-700 shrink-0">
             {TABS.map((tab, i) => (
@@ -884,7 +957,7 @@ export default function ConfiguratorPage() {
                         onClick={() =>
                           setBaseType(bt.id)
                         }
-                        className={`px-2.5 py-1.5 rounded text-xs border transition-colors ${
+                        className={`px-3 py-2 md:px-2.5 md:py-1.5 rounded text-xs border transition-colors ${
                           baseType === bt.id
                             ? "bg-black text-white dark:bg-white dark:text-black border-transparent"
                             : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-gray-500 dark:hover:border-gray-400"
@@ -1013,7 +1086,7 @@ export default function ConfiguratorPage() {
                       <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                         인접 추가
                       </p>
-                      <div className="grid grid-cols-3 gap-1 w-[160px] mx-auto">
+                      <div className="grid grid-cols-3 gap-1.5 w-[180px] md:w-[160px] mx-auto">
                         <span />
                         <button
                           type="button"
@@ -1284,8 +1357,52 @@ export default function ConfiguratorPage() {
             )}
           </div>
 
-          {/* ── Bottom Price + CTA ───────────── */}
-          <div className="border-t border-gray-200 dark:border-gray-700 p-4 shrink-0 bg-white dark:bg-gray-900">
+          {/* ── Mobile quick actions ──────────── */}
+          <div className="md:hidden flex gap-2 px-4 pb-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyShareLink}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded border border-gray-300 dark:border-gray-600 py-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                />
+              </svg>
+              공유
+            </button>
+            <button
+              type="button"
+              onClick={handleScreenshot}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded border border-gray-300 dark:border-gray-600 py-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
+              </svg>
+              스크린샷
+            </button>
+          </div>
+
+          {/* ── Bottom Price + CTA (desktop only) ─ */}
+          <div className="hidden md:block border-t border-gray-200 dark:border-gray-700 p-4 shrink-0 bg-white dark:bg-gray-900">
             <div className="flex items-baseline justify-between mb-1">
               <span className="text-[11px] text-gray-500 dark:text-gray-400">
                 참고 가격
@@ -1310,7 +1427,7 @@ export default function ConfiguratorPage() {
         </div>
 
         {/* ── 3D Viewer ──────────────────────────── */}
-        <div className="flex-1 min-w-0 h-full">
+        <div className="flex-1 min-w-0 h-full pb-14 md:pb-0">
           <Haller3DCanvas
             ref={canvasRef}
             configuration={configuration}
@@ -1318,6 +1435,40 @@ export default function ConfiguratorPage() {
             onSelectModule={handleSelectModule}
           />
         </div>
+
+        {/* ── Mobile Bottom Price Bar ──────────── */}
+        {!mobilePanel && (
+          <div className="md:hidden fixed bottom-0 inset-x-0 z-20 flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                참고 가격
+              </span>
+              <span className="text-base font-bold text-gray-900 dark:text-white tabular-nums">
+                ₩{referencePrice.toLocaleString("ko-KR")}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobilePanel(true)}
+              className="flex items-center gap-1.5 rounded-full bg-black dark:bg-white text-white dark:text-black px-4 py-2 text-xs font-medium"
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                />
+              </svg>
+              설정
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

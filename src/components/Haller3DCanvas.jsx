@@ -922,19 +922,26 @@ function buildModuleMeshes(
   }
 }
 
-function applySelection(node, isSelected) {
-  const emC = isSelected
-    ? new BABYLON.Color3(0.98, 0.75, 0.14)
-    : BABYLON.Color3.Black();
+const SEL_OUTLINE_COLOR = new BABYLON.Color3(1, 1, 1);
+const SEL_OUTLINE_WIDTH = 0.012;
 
+function applySelection(node, isSelected) {
   node.getChildren().forEach((c) => {
     if (!(c instanceof BABYLON.Mesh)) return;
     const t = c.metadata?.meshType;
-    if (
-      (t === "panel" || t === "front") &&
-      c.material instanceof BABYLON.StandardMaterial
-    ) {
-      c.material.emissiveColor = emC;
+    if (!t) return;
+
+    if (t === "panel" || t === "front") {
+      if (c.material instanceof BABYLON.StandardMaterial) {
+        c.material.emissiveColor = BABYLON.Color3.Black();
+      }
+      c.renderOutline = isSelected;
+      c.outlineColor = SEL_OUTLINE_COLOR;
+      c.outlineWidth = SEL_OUTLINE_WIDTH;
+    } else if (t === "tube" || t === "ball") {
+      c.renderOutline = isSelected;
+      c.outlineColor = SEL_OUTLINE_COLOR;
+      c.outlineWidth = SEL_OUTLINE_WIDTH * 0.6;
     }
   });
 }
@@ -1475,6 +1482,7 @@ const Haller3DCanvas = forwardRef(function Haller3DCanvas(
   return (
     <canvas
       ref={canvasRef}
+      style={{ touchAction: "none" }}
       className={
         "w-full h-full rounded-sm " +
         "bg-neutral-200 dark:bg-gray-900"
