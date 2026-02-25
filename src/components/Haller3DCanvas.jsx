@@ -422,7 +422,11 @@ function buildHallerFront(
     );
     pivotNode.parent = node;
     if (frontType === "door") {
-      pivotNode.position.y = -ph;
+      pivotNode.position = new BABYLON.Vector3(
+        0,
+        -ph,
+        hd - PANEL_THICK / 2
+      );
       pivotNode.metadata = {
         isPivot: true,
         frontType,
@@ -443,6 +447,8 @@ function buildHallerFront(
   const parentForFront = pivotNode || node;
 
   const panelY = frontType === "door" ? ph : 0;
+  const panelZ =
+    frontType === "door" ? 0 : hd - PANEL_THICK / 2;
   const panel = BABYLON.MeshBuilder.CreateBox(
     `front-${id}`,
     { width: pw * 2, height: ph * 2, depth: PANEL_THICK },
@@ -451,7 +457,7 @@ function buildHallerFront(
   panel.position = new BABYLON.Vector3(
     0,
     panelY,
-    hd - PANEL_THICK / 2
+    panelZ
   );
   panel.material = makePanelMat(
     scene,
@@ -491,7 +497,7 @@ function buildHallerFront(
     stem.position = new BABYLON.Vector3(
       0,
       handleY,
-      hd + stemLen / 2
+      PANEL_THICK / 2 + stemLen / 2
     );
     stem.material = hMat;
     stem.parent = parentForFront;
@@ -514,7 +520,7 @@ function buildHallerFront(
     knob.position = new BABYLON.Vector3(
       0,
       handleY,
-      hd + stemLen + knobDepth / 2
+      PANEL_THICK / 2 + stemLen + knobDepth / 2
     );
     knob.material = hMat;
     knob.parent = parentForFront;
@@ -538,7 +544,7 @@ function buildHallerFront(
     rim.position = new BABYLON.Vector3(
       0,
       handleY,
-      hd + stemLen + knobDepth
+      PANEL_THICK / 2 + stemLen + knobDepth
     );
     rim.material = hMat;
     rim.parent = parentForFront;
