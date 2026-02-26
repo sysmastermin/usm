@@ -12,9 +12,9 @@ import {
   FRONT_TYPES,
   GRID_UNIT_MM,
   HALLER_COLORS,
-  HALLER_DEPTH_UNITS,
-  HALLER_HEIGHT_UNITS,
-  HALLER_WIDTH_UNITS,
+  HALLER_DEPTH_OPTIONS,
+  HALLER_HEIGHT_OPTIONS,
+  HALLER_WIDTH_OPTIONS,
   HALLER_PRESETS,
   REFERENCE_PRICE_BASE_PER_UNIT,
   REFERENCE_PRICE_BASE_TYPE_ADDITION,
@@ -38,6 +38,45 @@ const LOCAL_STORAGE_KEY = "usm-haller-configurator-v1";
 const MAX_WIDTH_GRIDS = 8;
 const MAX_HISTORY = 30;
 const CONFIG_QUERY_KEY = "config";
+const SIZE_EPSILON = 1e-6;
+
+function normalizeDimensionUnit(field, rawValue) {
+  const parsed = Number(rawValue);
+  const fallback = 1;
+  if (!Number.isFinite(parsed)) return fallback;
+
+  const optionsByField = {
+    width: HALLER_WIDTH_OPTIONS,
+    height: HALLER_HEIGHT_OPTIONS,
+    depth: HALLER_DEPTH_OPTIONS,
+  };
+  const options = optionsByField[field] || [];
+  if (options.length === 0) return parsed;
+
+  // Backward compatibility: old payload may store mm values.
+  const unitCandidate =
+    parsed > 10 ? parsed / GRID_UNIT_MM : parsed;
+
+  let nearest = options[0].unit;
+  let minDiff = Math.abs(nearest - unitCandidate);
+  for (let i = 1; i < options.length; i += 1) {
+    const diff = Math.abs(options[i].unit - unitCandidate);
+    if (diff < minDiff) {
+      minDiff = diff;
+      nearest = options[i].unit;
+    }
+  }
+  return nearest;
+}
+
+function normalizeModuleDimensions(moduleLike) {
+  return {
+    ...moduleLike,
+    width: normalizeDimensionUnit("width", moduleLike.width),
+    height: normalizeDimensionUnit("height", moduleLike.height),
+    depth: normalizeDimensionUnit("depth", moduleLike.depth),
+  };
+}
 
 function getConfigFromUrl() {
   if (
@@ -215,7 +254,7 @@ export default function ConfiguratorPage() {
         ) {
           const next = parsed.modules.map((m) =>
             createModule({
-              ...m,
+              ...normalizeModuleDimensions(m),
               id: m.id || crypto.randomUUID(),
             })
           );
@@ -243,7 +282,7 @@ export default function ConfiguratorPage() {
       }
       const next = parsed.modules.map((m) =>
         createModule({
-          ...m,
+          ...normalizeModuleDimensions(m),
           id: m.id || crypto.randomUUID(),
         })
       );
@@ -654,29 +693,25 @@ export default function ConfiguratorPage() {
     { label: "색상" },
   ];
 
-  const DimButton = ({ value, unit, field, allModules }) => {
-    const mm = Math.round(value * GRID_UNIT_MM);
-    const currentVal = allModules
-      ? modules[0]?.[field]
-      : selectedModule?.[field];
-    const isActive = currentVal === value;
+  const DimButton = ({ option, field }) => {
+    const currentVal = selectedModule?.[field];
+    const isActive =
+      Number.isFinite(currentVal) &&
+      Math.abs(currentVal - option.unit) < SIZE_EPSILON;
     return (
       <button
         type="button"
+        disabled={!selectedModule}
         onClick={() => {
-          if (allModules) {
-            setAllModulesField(field, value);
-          } else {
-            setSelectedModuleField(field, value);
-          }
+          setSelectedModuleField(field, option.unit);
         }}
-        className={`px-3 py-2 md:px-2.5 md:py-1.5 text-xs font-medium border rounded-sm transition-colors ${
+        className={`px-3 py-2 md:px-2.5 md:py-1.5 text-xs font-medium border rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           isActive
             ? "bg-black text-white border-black dark:bg-white dark:text-black dark:border-white"
             : "bg-white text-gray-700 border-gray-300 hover:border-gray-500 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:border-gray-400"
         }`}
       >
-        {mm}
+        {option.mm}
       </button>
     );
   };
@@ -974,13 +1009,11 @@ export default function ConfiguratorPage() {
                     깊이 (mm)
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {HALLER_DEPTH_UNITS.map((u) => (
+                    {HALLER_DEPTH_OPTIONS.map((option) => (
                       <DimButton
-                        key={u}
-                        value={u}
-                        unit={u}
+                        key={option.mm}
+                        option={option}
                         field="depth"
-                        allModules
                       />
                     ))}
                   </div>
@@ -991,13 +1024,11 @@ export default function ConfiguratorPage() {
                     높이 (mm)
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {HALLER_HEIGHT_UNITS.map((u) => (
+                    {HALLER_HEIGHT_OPTIONS.map((option) => (
                       <DimButton
-                        key={u}
-                        value={u}
-                        unit={u}
+                        key={option.mm}
+                        option={option}
                         field="height"
-                        allModules
                       />
                     ))}
                   </div>
@@ -1008,13 +1039,11 @@ export default function ConfiguratorPage() {
                     너비 (mm)
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {HALLER_WIDTH_UNITS.map((u) => (
+                    {HALLER_WIDTH_OPTIONS.map((option) => (
                       <DimButton
-                        key={u}
-                        value={u}
-                        unit={u}
+                        key={option.mm}
+                        option={option}
                         field="width"
-                        allModules
                       />
                     ))}
                   </div>

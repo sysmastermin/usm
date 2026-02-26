@@ -24,18 +24,46 @@ export const REFERENCE_PRICE_FRONT_TYPE_MULTIPLIER = {
   glass: 1.25,
 };
 
-export const HALLER_WIDTH_UNITS = [1, 1.5, 2, 2.5, 3];
-export const HALLER_HEIGHT_UNITS = [1, 1.5, 2, 2.5, 3];
-export const HALLER_DEPTH_UNITS = [0.75, 1, 1.25];
+export const HALLER_WIDTH_OPTIONS = [
+  { mm: 250, unit: 1 },
+  { mm: 375, unit: 1.5 },
+  { mm: 500, unit: 2 },
+  { mm: 625, unit: 2.5 },
+  { mm: 750, unit: 3 },
+];
 
-export const HALLER_WIDTH_MM = HALLER_WIDTH_UNITS.map(
-  (u) => Math.round(u * GRID_UNIT_MM)
+export const HALLER_HEIGHT_OPTIONS = [
+  { mm: 250, unit: 1 },
+  { mm: 375, unit: 1.5 },
+  { mm: 500, unit: 2 },
+  { mm: 625, unit: 2.5 },
+  { mm: 750, unit: 3 },
+];
+
+export const HALLER_DEPTH_OPTIONS = [
+  { mm: 187, unit: 187 / GRID_UNIT_MM },
+  { mm: 250, unit: 1 },
+  { mm: 312, unit: 312 / GRID_UNIT_MM },
+];
+
+// Backward-compatible exports (used in existing UI/logic)
+export const HALLER_WIDTH_UNITS = HALLER_WIDTH_OPTIONS.map(
+  (option) => option.unit
 );
-export const HALLER_HEIGHT_MM = HALLER_HEIGHT_UNITS.map(
-  (u) => Math.round(u * GRID_UNIT_MM)
+export const HALLER_HEIGHT_UNITS =
+  HALLER_HEIGHT_OPTIONS.map((option) => option.unit);
+export const HALLER_DEPTH_UNITS = HALLER_DEPTH_OPTIONS.map(
+  (option) => option.unit
 );
-export const HALLER_DEPTH_MM = HALLER_DEPTH_UNITS.map(
-  (u) => Math.round(u * GRID_UNIT_MM)
+
+export const HALLER_WIDTH_MM = HALLER_WIDTH_OPTIONS.map(
+  (option) => option.mm
+);
+export const HALLER_HEIGHT_MM = HALLER_HEIGHT_OPTIONS.map(
+  (option) => option.mm
+);
+export const HALLER_DEPTH_MM = HALLER_DEPTH_OPTIONS.map(
+  (option) => option.mm
 );
 
 /** 하단 받침대 타입 */

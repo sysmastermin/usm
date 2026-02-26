@@ -88,30 +88,38 @@ function getHandleMat(scene) {
   return m;
 }
 
-function makePanelMat(scene, name, hex, glass = false) {
-  const m = new BABYLON.StandardMaterial(name, scene);
-  m.diffuseColor = safeColor(hex);
-  if (glass) {
-    m.diffuseColor = new BABYLON.Color3(0.55, 0.72, 0.82);
-    m.specularColor = new BABYLON.Color3(0.95, 0.97, 1.0);
-    m.specularPower = 160;
-    m.alpha = 0.52;
-    m.backFaceCulling = false;
-    m.emissiveColor = new BABYLON.Color3(0.12, 0.18, 0.25);
-    m.emissiveFresnelParameters =
+function applyGlassMaterialProps(material) {
+  material.diffuseColor = new BABYLON.Color3(0.78, 0.94, 0.99);
+  material.specularColor = new BABYLON.Color3(0.95, 0.97, 1.0);
+  material.specularPower = 190;
+  material.alpha = 0.2;
+  material.backFaceCulling = false;
+  material.emissiveColor = new BABYLON.Color3(0.025, 0.045, 0.07);
+  if (!material.emissiveFresnelParameters) {
+    material.emissiveFresnelParameters =
       new BABYLON.FresnelParameters({
         bias: 0.35,
         power: 2,
         leftColor: new BABYLON.Color3(0.7, 0.85, 1.0),
         rightColor: BABYLON.Color3.Black(),
       });
-    m.opacityFresnelParameters =
+  }
+  if (!material.opacityFresnelParameters) {
+    material.opacityFresnelParameters =
       new BABYLON.FresnelParameters({
         bias: 0.55,
         power: 1.8,
         leftColor: BABYLON.Color3.White(),
-        rightColor: new BABYLON.Color3(0.45, 0.45, 0.45),
+        rightColor: new BABYLON.Color3(0.35, 0.35, 0.35),
       });
+  }
+}
+
+function makePanelMat(scene, name, hex, glass = false) {
+  const m = new BABYLON.StandardMaterial(name, scene);
+  m.diffuseColor = safeColor(hex);
+  if (glass) {
+    applyGlassMaterialProps(m);
   } else {
     m.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3);
     m.specularPower = 32;
@@ -560,7 +568,7 @@ function buildHallerFront(
 
   if (frontType === "drawer") {
     const frameMat = getChromeMat(scene);
-    const wallH = ph * 0.45;
+    const wallH = ph * 0.32;
     const wallD = hd * 1.6;
     const wallT = PANEL_THICK;
     const wallZ = hd - wallD / 2 - PANEL_THICK;
@@ -1153,7 +1161,7 @@ function buildModuleMeshes(
     }
   }
 
-  applySelection(node, isSelected);
+  applySelection(node, isSelected, frontType);
 
   if (USE_GLTF_MODELS && HALLER_GLTF_BASE_URL) {
     tryLoadGltf(
@@ -1194,13 +1202,17 @@ function getAllDescendantMeshes(node) {
   return result;
 }
 
-function applySelection(node, isSelected) {
+function applySelection(node, isSelected, frontType) {
   getAllDescendantMeshes(node).forEach((c) => {
     const t = c.metadata?.meshType;
     if (!t) return;
 
     if (t === "panel" || t === "front") {
-      if (c.material instanceof BABYLON.StandardMaterial) {
+      const isGlassFront = t === "front" && frontType === "glass";
+      if (
+        c.material instanceof BABYLON.StandardMaterial &&
+        !isGlassFront
+      ) {
         c.material.emissiveColor = BABYLON.Color3.Black();
       }
       c.renderOutline = isSelected;
@@ -1221,13 +1233,14 @@ function updateColors(node, color, frontType, isSelected) {
       (t === "panel" || t === "front") &&
       c.material instanceof BABYLON.StandardMaterial
     ) {
-      c.material.diffuseColor = safeColor(color);
       if (t === "front" && frontType === "glass") {
-        c.material.alpha = 0.52;
+        applyGlassMaterialProps(c.material);
+        return;
       }
+      c.material.diffuseColor = safeColor(color);
     }
   });
-  applySelection(node, isSelected);
+  applySelection(node, isSelected, frontType);
 }
 
 // ── Dimension Lines ─────────────────────────────────────────
