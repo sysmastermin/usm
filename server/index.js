@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import apiRoutes from './routes/api.js';
 import { getPool, closePool } from './config/db.js';
 import { createCategoriesTable, createProductsTable } from './services/dbService.js';
+import { createAdminCredentialsTable } from './services/adminAuthService.js';
 
 dotenv.config();
 
@@ -60,6 +61,7 @@ async function startServer() {
     console.log('📋 테이블 마이그레이션 실행 중...');
     await createCategoriesTable();
     await createProductsTable();
+    await createAdminCredentialsTable();
     console.log('✅ 테이블 마이그레이션 완료');
     
     app.listen(PORT, () => {

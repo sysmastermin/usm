@@ -91,3 +91,13 @@ export async function runIngest() {
   });
   return response;
 }
+
+/**
+ * 관리자 비밀번호 변경
+ */
+export async function changeAdminPassword(payload) {
+  return request('/admin/password/change', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

@@ -7,6 +7,7 @@ import SceneDetailPage from "./pages/SceneDetailPage";
 import CategoryPage from "./pages/CategoryPage";
 import ColorPage from "./pages/ColorPage";
 import ConfiguratorPage from "./pages/ConfiguratorPage";
+import AdminPage from "./pages/AdminPage";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
         <Route path="category/:categoryName" element={<CategoryPage />} />
         <Route path="color/:colorName" element={<ColorPage />} />
         <Route path="configurator" element={<ConfiguratorPage />} />
+        <Route path="admin" element={<AdminPage />} />
         <Route path="*" element={<div className="p-12 text-center text-gray-500">404 Not Found</div>} />
       </Route>
     </Routes>

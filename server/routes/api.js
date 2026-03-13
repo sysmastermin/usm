@@ -1,6 +1,10 @@
 import express from 'express';
 import { crawlAll } from '../services/crawler.js';
 import { saveCrawlResult, getCategories, getProducts, getProductById, getProductByLegacyId } from '../services/dbService.js';
+import {
+  verifyAdminPassword,
+  updateAdminPassword,
+} from '../services/adminAuthService.js';
 
 const router = express.Router();
 
@@ -220,6 +224,69 @@ router.get('/products/legacy/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '상품 상세 조회 실패',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/password/change
+ * 관리자 비밀번호 변경
+ */
+router.post('/admin/password/change', async (req, res) => {
+  try {
+    const {
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    } = req.body || {};
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: '모든 비밀번호 입력값이 필요합니다',
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호 확인이 일치하지 않습니다',
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호는 8자 이상이어야 합니다',
+      });
+    }
+
+    if (!/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호는 영문과 숫자를 모두 포함해야 합니다',
+      });
+    }
+
+    const isCurrentPasswordValid = await verifyAdminPassword(currentPassword);
+    if (!isCurrentPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: '현재 비밀번호가 올바르지 않습니다',
+      });
+    }
+
+    await updateAdminPassword(newPassword);
+    return res.json({
+      success: true,
+      message: '관리자 비밀번호가 변경되었습니다',
+    });
+  } catch (error) {
+    console.error('관리자 비밀번호 변경 실패:', error);
+    return res.status(500).json({
+      success: false,
+      message: '관리자 비밀번호 변경 실패',
       error: error.message,
     });
   }
