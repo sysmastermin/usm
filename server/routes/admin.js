@@ -42,8 +42,16 @@ import {
 import {
   crawlSceneProducts,
 } from '../services/sceneCrawler.js';
+import {
+  verifyAdminPassword,
+  updateAdminPassword,
+} from '../services/adminAuthService.js';
 
 const router = express.Router();
+
+function isValidPasswordValue(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
 
 /* ----------------------------------------
  * POST /api/admin/login
@@ -66,6 +74,82 @@ router.get('/verify', authMiddleware, (req, res) => {
  * 이하 모든 라우트에 인증 미들웨어 적용
  * ---------------------------------------- */
 router.use(authMiddleware);
+
+/* ----------------------------------------
+ * PUT /api/admin/password
+ * 관리자 비밀번호 변경 (인증 필요)
+ * ---------------------------------------- */
+router.put('/password', async (req, res) => {
+  try {
+    const {
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    } = req.body || {};
+
+    if (
+      !isValidPasswordValue(currentPassword) ||
+      !isValidPasswordValue(newPassword) ||
+      !isValidPasswordValue(confirmPassword)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: '모든 비밀번호 입력값이 필요합니다',
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호 확인이 일치하지 않습니다',
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호는 8자 이상이어야 합니다',
+      });
+    }
+
+    if (!/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호는 영문과 숫자를 모두 포함해야 합니다',
+      });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호는 현재 비밀번호와 달라야 합니다',
+      });
+    }
+
+    const isCurrentPasswordValid = await verifyAdminPassword(
+      currentPassword
+    );
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: '현재 비밀번호가 올바르지 않습니다',
+        code: 'INVALID_CURRENT_PASSWORD',
+      });
+    }
+
+    await updateAdminPassword(newPassword);
+    return res.json({
+      success: true,
+      message: '관리자 비밀번호가 변경되었습니다',
+    });
+  } catch (error) {
+    console.error('관리자 비밀번호 변경 실패:', error);
+    return res.status(500).json({
+      success: false,
+      message: '관리자 비밀번호 변경 실패',
+    });
+  }
+});
 
 /* ----------------------------------------
  * GET /api/admin/dashboard

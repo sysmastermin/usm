@@ -82,6 +82,9 @@ const AdminScenes = lazy(
 const AdminSceneDetail = lazy(
   () => import("./pages/admin/AdminSceneDetail")
 );
+const AdminPasswordPage = lazy(
+  () => import("./pages/admin/AdminPasswordPage")
+);
 
 /**
  * 페이지 로딩 UI
@@ -197,6 +200,7 @@ function App() {
         <Route path="scenes/:id" element={<AdminSceneDetail />} />
         <Route path="crawler" element={<AdminCrawler />} />
         <Route path="translations" element={<AdminTranslations />} />
+        <Route path="password" element={<AdminPasswordPage />} />
       </Route>
 
       {/* 404 */}

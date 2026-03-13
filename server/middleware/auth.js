@@ -1,16 +1,27 @@
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import process from 'node:process';
+import crypto from 'node:crypto';
+import { verifyAdminPassword } from '../services/adminAuthService.js';
 
 dotenv.config();
 
+const hasJwtSecret = Boolean(
+  process.env.JWT_SECRET && process.env.JWT_SECRET.trim()
+);
 const JWT_SECRET = (
   process.env.JWT_SECRET ||
-  'usm-admin-jwt-secret-key-fallback'
-).trim();
-const ADMIN_PASSWORD = (
-  process.env.ADMIN_PASSWORD || 'usm@admin2026!'
+  crypto.randomBytes(32).toString('hex')
 ).trim();
 const TOKEN_EXPIRY = '24h';
+
+function isValidPasswordInput(value) {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.length <= 128
+  );
+}
 
 // --- Rate Limiting (IP별 5회/분) ---
 const loginAttempts = new Map();
@@ -34,6 +45,12 @@ if (typeof globalThis.__rateLimitCleaner === 'undefined') {
   if (globalThis.__rateLimitCleaner?.unref) {
     globalThis.__rateLimitCleaner.unref();
   }
+}
+
+if (!hasJwtSecret) {
+  console.warn(
+    '[admin-auth] JWT_SECRET 미설정: 서버 재시작 시 관리자 토큰이 모두 만료됩니다.'
+  );
 }
 
 /**
@@ -75,18 +92,21 @@ export function loginRateLimiter(req, res, next) {
  * - 환경변수 비밀번호와 대조
  * - 일치 시 JWT 토큰 발급 (24시간 만료)
  */
-export function handleLogin(req, res) {
+export async function handleLogin(req, res) {
   try {
     const { password } = req.body;
 
-    if (!password) {
+    if (!isValidPasswordInput(password)) {
       return res.status(400).json({
         success: false,
         message: '비밀번호를 입력해주세요',
       });
     }
 
-    if (password !== ADMIN_PASSWORD) {
+    const isValidPassword = await verifyAdminPassword(
+      password
+    );
+    if (!isValidPassword) {
       return res.status(401).json({
         success: false,
         message: '비밀번호가 올바르지 않습니다',

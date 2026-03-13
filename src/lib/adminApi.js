@@ -86,4 +86,17 @@ export const publicApi = axios.create({
   timeout: 15000,
 });
 
+/**
+ * 관리자 비밀번호 변경
+ * @param {{
+ *  currentPassword: string,
+ *  newPassword: string,
+ *  confirmPassword: string
+ * }} payload
+ */
+export async function changeAdminPassword(payload) {
+  const response = await adminApi.put('/password', payload);
+  return response.data;
+}
+
 export default adminApi;

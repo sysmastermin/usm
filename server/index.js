@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import process from 'node:process';
 import app from './app.js';
 import { getPool, closePool } from './config/db.js';
 import {
@@ -10,6 +11,9 @@ import {
 import {
   createShopTables,
 } from './services/shopService.js';
+import {
+  createAdminCredentialsTable,
+} from './services/adminAuthService.js';
 
 dotenv.config();
 
@@ -28,6 +32,7 @@ async function startServer() {
     await createScenesTable();
     await createSceneProductLinksTable();
     await createShopTables();
+    await createAdminCredentialsTable();
     console.log('✅ 테이블 마이그레이션 완료');
 
     app.listen(PORT, () => {

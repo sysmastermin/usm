@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -11,6 +11,7 @@ import {
   X,
   Moon,
   Sun,
+  KeyRound,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAdminAuth } from '../../context/AdminAuthContext';
@@ -71,7 +72,6 @@ export default function AdminSidebar({
 }) {
   const { theme, toggleTheme } = useTheme();
   const { logout } = useAdminAuth();
-  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -129,6 +129,27 @@ export default function AdminSidebar({
 
       {/* 하단 액션 */}
       <div className="p-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
+        {/* 비밀번호 변경 */}
+        <NavLink
+          to="/admin/password"
+          onClick={onMobileClose}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg w-full',
+              'text-sm font-medium transition-colors',
+              'min-h-[44px]',
+              isActive
+                ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+            )
+          }
+        >
+          <KeyRound className="w-5 h-5 shrink-0" />
+          <span className="sidebar-text truncate">
+            비밀번호 변경
+          </span>
+        </NavLink>
+
         {/* 테마 토글 */}
         <button
           onClick={toggleTheme}
